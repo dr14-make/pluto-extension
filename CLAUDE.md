@@ -9,6 +9,7 @@ VSCode extension for Julia Pluto notebooks. Integrates with `@plutojl/rainbow` p
 ## Development Commands
 
 ### Build and Watch
+
 ```bash
 npm run compile          # Type check, lint, and build once
 npm run watch            # Watch mode (runs esbuild + tsc in parallel)
@@ -16,12 +17,14 @@ npm run package          # Production build (minified, no sourcemaps)
 ```
 
 ### Type Checking and Linting
+
 ```bash
 npm run check-types      # TypeScript type checking only
 npm run lint             # ESLint
 ```
 
 ### Testing
+
 ```bash
 npm run test             # Run all tests
 npm run compile-tests    # Compile tests to out/ directory
@@ -29,6 +32,7 @@ npm run watch-tests      # Watch mode for tests
 ```
 
 ### Debug
+
 Press `F5` in VSCode to launch Extension Development Host window for testing.
 
 ## Architecture
@@ -36,18 +40,21 @@ Press `F5` in VSCode to launch Extension Development Host window for testing.
 ### Core Components
 
 **Extension Entry Point** (`src/extension.ts`)
+
 - Activates on `onNotebook:pluto-notebook` event
 - Registers `PlutoNotebookSerializer` for `.jl` file handling
 - Registers `PlutoNotebookController` for cell execution
 - All components added to context subscriptions for proper disposal
 
 **Notebook Serializer** (`src/serializer.ts`)
+
 - Implements `vscode.NotebookSerializer` interface
 - Currently uses simple JSON format (placeholder)
 - TODO: Parse actual Pluto .jl format with cell markers (`# ╔═╡`), metadata, and reactive dependencies
 - Converts between Pluto format and VSCode `NotebookData`/`NotebookCellData`
 
 **Notebook Controller** (`src/controller.ts`)
+
 - Implements notebook controller for cell execution
 - Controller ID: `pluto-notebook-controller`
 - Notebook type: `pluto-notebook`
@@ -59,6 +66,7 @@ Press `F5` in VSCode to launch Extension Development Host window for testing.
 ### Build System
 
 Uses esbuild (`esbuild.js`) for bundling:
+
 - Entry point: `src/extension.ts`
 - Output: `dist/extension.js` (CommonJS format)
 - External: `vscode` module (provided by VSCode runtime)
@@ -77,11 +85,13 @@ TypeScript compilation targets Node16 module system and ES2022 with strict mode 
 ## Current Status
 
 Basic extension structure is complete:
+
 - Serializer and controller are registered and functional
 - Extension can be debugged with F5
 - Build system works correctly
 
 Placeholder implementation:
+
 - Serializer uses JSON format instead of Pluto .jl format
 - Controller simulates execution without connecting to Pluto backend
 

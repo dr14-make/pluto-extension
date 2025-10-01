@@ -1,12 +1,12 @@
 // Use dynamic import
 let parse: any;
 
-describe('Debug Parser Output', () => {
+describe("Debug Parser Output", () => {
   beforeAll(async () => {
-    const rainbow = await import('@plutojl/rainbow');
+    const rainbow = await import("@plutojl/rainbow");
     parse = rainbow.parse;
   });
-  it('should test real format', () => {
+  it("should test real format", () => {
     const notebook = `### A Pluto.jl notebook ###
 # v0.14.0
 
@@ -28,8 +28,8 @@ n = 1:100
 
     const result = parse(notebook);
 
-    console.log('Cell order:', result.cell_order);
-    console.log('Cell inputs keys:', Object.keys(result.cell_inputs));
+    console.log("Cell order:", result.cell_order);
+    console.log("Cell inputs keys:", Object.keys(result.cell_inputs));
     expect(result.cell_order.length).toBeGreaterThan(0);
   });
 });
