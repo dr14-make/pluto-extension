@@ -4,6 +4,8 @@
 using Markdown
 using InteractiveUtils
 
+# This cell contains imports that will be used throughout the notebook
+
 # ╔═╡ 8e6f3a40-9e3a-11ee-3f5e-0fb8c1c8e8e8
 md"""
 # Pluto Notebook Demo

@@ -1,4 +1,6 @@
 const esbuild = require("esbuild");
+const { copyFileSync, mkdirSync } = require("fs");
+const { join } = require("path");
 
 const production = process.argv.includes('--production');
 const watch = process.argv.includes('--watch');
@@ -24,6 +26,18 @@ const esbuildProblemMatcherPlugin = {
 };
 
 async function main() {
+	// Copy xhr-sync-worker.js to dist if it exists
+	try {
+		mkdirSync('dist', { recursive: true });
+		copyFileSync(
+			join('node_modules', 'xhr-sync', 'lib', 'xhr-sync-worker.js'),
+			join('dist', 'xhr-sync-worker.js')
+		);
+	} catch (e) {
+		// Worker file might not exist in all versions
+		console.warn('Could not copy xhr-sync-worker.js:', e.message);
+	}
+
 	const ctx = await esbuild.context({
 		entryPoints: [
 			'src/extension.ts'

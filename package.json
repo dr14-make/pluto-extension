@@ -44,9 +44,13 @@
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "test:unit": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "@types/vscode": "^1.104.0",
@@ -56,7 +60,10 @@
     "@vscode/test-electron": "^2.5.2",
     "esbuild": "^0.25.9",
     "eslint": "^9.34.0",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
     "npm-run-all": "^4.1.5",
+    "ts-jest": "^29.4.4",
     "typescript": "^5.9.2"
   },
   "dependencies": {
