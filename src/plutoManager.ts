@@ -1,11 +1,17 @@
 import * as vscode from "vscode";
-import { Host } from "@plutojl/rainbow";
+import {
+  CellInputData,
+  CellResultData,
+  Host,
+  UpdateEvent,
+  Worker,
+} from "@plutojl/rainbow";
 /**
  * Manages connection to Pluto server and notebook sessions
  */
 export class PlutoManager {
-  private host: any; // Host from @plutojl/rainbow
-  private workers: Map<string, any> = new Map(); // notebook_id -> Worker
+  private host?: Host; // Host from @plutojl/rainbow
+  private workers: Map<string, Worker> = new Map(); // notebook_id -> Worker
   private serverUrl: string;
 
   constructor(serverUrl: string = "http://localhost:1234") {
@@ -24,8 +30,8 @@ export class PlutoManager {
    */
   async getWorker(
     notebookUri: vscode.Uri,
-    notebookContent?: string,
-  ): Promise<any> {
+    notebookContent?: string
+  ): Promise<Worker | undefined> {
     if (!this.host) {
       await this.initialize();
     }
@@ -35,7 +41,7 @@ export class PlutoManager {
     // Check if we already have a worker for this notebook
     let worker = this.workers.get(notebookPath);
 
-    if (!worker) {
+    if (!worker && this.host) {
       // Create a new worker by uploading notebook content
       if (notebookContent) {
         worker = await this.host.createWorker(notebookContent);
@@ -46,7 +52,7 @@ export class PlutoManager {
     }
 
     // Ensure worker is connected
-    if (!worker.connected) {
+    if (worker && !worker.connected) {
       await worker.connect();
     }
 
@@ -56,7 +62,12 @@ export class PlutoManager {
   /**
    * Execute a cell
    */
-  async executeCell(worker: any, cellId: string, code: string): Promise<any> {
+  async executeCell(
+    worker: Worker,
+    cellId: string,
+    code: string
+    // todo: check this type, export and fix upstream
+  ): Promise<{ input: CellInputData; results: CellResultData } | null> {
     try {
       // Update cell code and run it
       await worker.updateSnippetCode(cellId, code, true);
@@ -76,7 +87,7 @@ export class PlutoManager {
   /**
    * Add a new cell to the notebook
    */
-  async addCell(worker: any, index: number, code: string): Promise<string> {
+  async addCell(worker: Worker, index: number, code: string): Promise<string> {
     const cellId = await worker.addSnippet(index, code);
     return cellId;
   }
@@ -84,14 +95,14 @@ export class PlutoManager {
   /**
    * Delete a cell from the notebook
    */
-  async deleteCell(worker: any, cellId: string): Promise<void> {
-    await worker.deleteSnippet(cellId);
+  async deleteCell(worker: Worker, cellId: string): Promise<void> {
+    await worker.deleteSnippets([cellId]);
   }
 
   /**
    * Restart the notebook kernel
    */
-  async restartNotebook(worker: any): Promise<void> {
+  async restartNotebook(worker: Worker): Promise<void> {
     await worker.restart();
   }
 
@@ -121,7 +132,10 @@ export class PlutoManager {
   /**
    * Subscribe to notebook updates
    */
-  onNotebookUpdate(worker: any, callback: (event: any) => void): () => void {
+  onNotebookUpdate(
+    worker: Worker,
+    callback: (event: UpdateEvent) => void
+  ): () => void {
     return worker.onUpdate(callback);
   }
 }

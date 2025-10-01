@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { PlutoManager } from "./plutoManager.ts";
+import { Worker } from "@plutojl/rainbow";
 
 export class PlutoNotebookController {
   readonly controllerId = "pluto-notebook-controller";
@@ -10,13 +11,13 @@ export class PlutoNotebookController {
   private readonly _controller: vscode.NotebookController;
   private readonly _plutoManager: PlutoManager;
   private _executionOrder = 0;
-  private _workers: Map<string, any> = new Map(); // notebook URI -> Worker
+  private _workers: Map<string, Worker> = new Map(); // notebook URI -> Worker
 
-  constructor() {
+  constructor(url?: string) {
     this._controller = vscode.notebooks.createNotebookController(
       this.controllerId,
       this.notebookType,
-      this.label,
+      this.label
     );
 
     this._controller.supportedLanguages = this.supportedLanguages;
@@ -24,7 +25,7 @@ export class PlutoNotebookController {
     this._controller.executeHandler = this._execute.bind(this);
 
     // Initialize Pluto manager
-    this._plutoManager = new PlutoManager();
+    this._plutoManager = new PlutoManager(url);
   }
 
   dispose(): void {
@@ -35,7 +36,7 @@ export class PlutoNotebookController {
   private _execute(
     cells: vscode.NotebookCell[],
     notebook: vscode.NotebookDocument,
-    _controller: vscode.NotebookController,
+    _controller: vscode.NotebookController
   ): void {
     for (const cell of cells) {
       this._doExecution(cell, notebook);
@@ -44,7 +45,7 @@ export class PlutoNotebookController {
 
   private async _doExecution(
     cell: vscode.NotebookCell,
-    notebook: vscode.NotebookDocument,
+    notebook: vscode.NotebookDocument
   ): Promise<void> {
     const execution = this._controller.createNotebookCellExecution(cell);
     execution.executionOrder = ++this._executionOrder;
@@ -59,10 +60,13 @@ export class PlutoNotebookController {
         const notebookContent = await this._getNotebookContent(notebook);
         worker = await this._plutoManager.getWorker(
           notebook.uri,
-          notebookContent,
+          notebookContent
         );
-        this._workers.set(notebook.uri.toString(), worker);
+        if (!worker) {
+          throw new Error("Failed to create worker");
+        }
 
+        this._workers.set(notebook.uri.toString(), worker);
         // Subscribe to updates
         this._plutoManager.onNotebookUpdate(worker, (event: any) => {
           this._handleNotebookUpdate(notebook, event);
@@ -80,10 +84,12 @@ export class PlutoNotebookController {
       const cellData = await this._plutoManager.executeCell(
         worker,
         cellId,
-        code,
+        code
       );
 
       // Format and display output
+      // The type is wrong, ignore probably
+      // TODO: Fix upstream
       if (cellData?.output) {
         const output = this._formatCellOutput(cellData.output);
         execution.replaceOutput([output]);
@@ -109,7 +115,7 @@ export class PlutoNotebookController {
   }
 
   private async _getNotebookContent(
-    notebook: vscode.NotebookDocument,
+    notebook: vscode.NotebookDocument
   ): Promise<string> {
     // Read the raw notebook file content
     try {
@@ -149,7 +155,7 @@ export class PlutoNotebookController {
 
   private _handleNotebookUpdate(
     notebook: vscode.NotebookDocument,
-    event: any,
+    event: any
   ): void {
     // Handle real-time updates from Pluto server
     // This could update cell outputs, execution states, etc.
