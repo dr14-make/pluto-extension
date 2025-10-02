@@ -13,7 +13,7 @@ export class PlutoNotebookController {
   private _executionOrder = 0;
   private _workers: Map<string, Worker> = new Map(); // notebook URI -> Worker
 
-  constructor(url?: string) {
+  constructor(plutoManager: PlutoManager) {
     this._controller = vscode.notebooks.createNotebookController(
       this.controllerId,
       this.notebookType,
@@ -25,7 +25,7 @@ export class PlutoNotebookController {
     this._controller.executeHandler = this._execute.bind(this);
 
     // Initialize Pluto manager
-    this._plutoManager = new PlutoManager(url);
+    this._plutoManager = plutoManager;
   }
 
   dispose(): void {
@@ -88,10 +88,8 @@ export class PlutoNotebookController {
       );
 
       // Format and display output
-      // The type is wrong, ignore probably
-      // TODO: Fix upstream
-      if (cellData?.output) {
-        const output = this._formatCellOutput(cellData.output);
+      if (cellData) {
+        const output = this._formatCellOutput(cellData);
         execution.replaceOutput([output]);
       } else {
         // No output or still running

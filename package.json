@@ -15,6 +15,16 @@
   ],
   "main": "./dist/extension.cjs",
   "contributes": {
+    "configuration": {
+      "title": "Pluto Notebook",
+      "properties": {
+        "pluto-notebook.port": {
+          "type": "number",
+          "default": 1234,
+          "description": "Port number for the Pluto server"
+        }
+      }
+    },
     "notebooks": [
       {
         "type": "pluto-notebook",
@@ -30,6 +40,18 @@
       {
         "command": "pluto-notebook.helloWorld",
         "title": "Hello World"
+      },
+      {
+        "command": "pluto-notebook.startServer",
+        "title": "Pluto: Start Server"
+      },
+      {
+        "command": "pluto-notebook.stopServer",
+        "title": "Pluto: Stop Server"
+      },
+      {
+        "command": "pluto-notebook.restartServer",
+        "title": "Pluto: Restart Server"
       }
     ]
   },

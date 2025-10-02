@@ -82,6 +82,29 @@ TypeScript compilation targets Node16 module system and ES2022 with strict mode 
 - **@plutojl/rainbow**: Package for communicating with Pluto server; needs integration in controller
 - **Notebook Type**: Registered as `pluto-notebook` with `.jl` file pattern selector
 
+### @plutojl/rainbow Usage
+
+**IMPORTANT**: Always import the node polyfill first:
+```typescript
+import "@plutojl/rainbow/node-polyfill";
+```
+
+**Key API Patterns**:
+
+1. **Creating Worker**: Always trim notebook content before passing to `createWorker`:
+   ```typescript
+   const worker = await host.createWorker(notebookContent.trim());
+   await worker.connect();
+   ```
+
+2. **Executing Cells**:
+   - For NEW cells: `worker.waitSnippet(index, code)` - takes index (number), returns CellResultData
+   - For EXISTING cells: `worker.updateSnippetCode(cellId, code, run)` then `worker.wait(true)` then `worker.getSnippet(cellId)`
+
+3. **Getting Cell Data**:
+   - `worker.getSnippet(cellId)` returns `{ input: CellInputData, results: CellResultData }` or null
+   - Use `cellData?.results` to access the output
+
 ## Current Status
 
 Basic extension structure is complete:

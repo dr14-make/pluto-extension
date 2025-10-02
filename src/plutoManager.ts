@@ -1,11 +1,12 @@
+import "@plutojl/rainbow/node-polyfill";
 import * as vscode from "vscode";
 import {
-  CellInputData,
   CellResultData,
   Host,
   UpdateEvent,
   Worker,
 } from "@plutojl/rainbow";
+import { ChildProcess, spawn } from "child_process";
 /**
  * Manages connection to Pluto server and notebook sessions
  */
@@ -13,16 +14,124 @@ export class PlutoManager {
   private host?: Host; // Host from @plutojl/rainbow
   private workers: Map<string, Worker> = new Map(); // notebook_id -> Worker
   private serverUrl: string;
+  private juliaProcess?: ChildProcess;
 
-  constructor(serverUrl: string = "http://localhost:1234") {
-    this.serverUrl = serverUrl;
+  constructor(
+    private port: number = 1234,
+    private outputChannel: vscode.OutputChannel
+  ) {
+    this.serverUrl = `http://localhost:${port}`;
   }
 
   /**
-   * Initialize connection to Pluto server
+   * Start Pluto server
    */
-  async initialize(): Promise<void> {
-    this.host = new Host(this.serverUrl);
+  async start(): Promise<void> {
+    if (this.juliaProcess) {
+      this.outputChannel.appendLine("Pluto server is already running");
+      return;
+    }
+
+    this.outputChannel.appendLine(
+      `Starting Pluto server on port ${this.port}...`
+    );
+
+    try {
+      this.juliaProcess = await this.runServer(this.port);
+      this.outputChannel.appendLine("Pluto server started successfully!");
+
+      // Pipe Julia stdout to output channel
+      this.juliaProcess.stdout?.on("data", (data) => {
+        this.outputChannel.append(data.toString());
+      });
+
+      // Pipe Julia stderr to output channel
+      this.juliaProcess.stderr?.on("data", (data) => {
+        this.outputChannel.append(data.toString());
+      });
+
+      // Handle process exit
+      this.juliaProcess.on("exit", (code) => {
+        this.outputChannel.appendLine(
+          `Pluto server exited with code ${code ?? "unknown"}`
+        );
+        this.juliaProcess = undefined;
+        this.host = undefined;
+      });
+
+      // Initialize host connection
+      this.host = new Host(this.serverUrl);
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(
+        `Failed to start Pluto server: ${errorMessage}`
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Stop Pluto server
+   */
+  async stop(): Promise<void> {
+    if (!this.juliaProcess) {
+      this.outputChannel.appendLine("Pluto server is not running");
+      return;
+    }
+
+    this.outputChannel.appendLine("Stopping Pluto server...");
+
+    // Close all workers
+    for (const worker of this.workers.values()) {
+      worker.close();
+    }
+    this.workers.clear();
+
+    // Kill Julia process
+    this.juliaProcess.kill();
+    this.juliaProcess = undefined;
+    this.host = undefined;
+
+    this.outputChannel.appendLine("Pluto server stopped");
+  }
+
+  /**
+   * Restart Pluto server
+   */
+  async restart(): Promise<void> {
+    this.outputChannel.appendLine("Restarting Pluto server...");
+    await this.stop();
+    await this.start();
+  }
+
+  private runServer(port: number = 1234): Promise<ChildProcess> {
+    return new Promise((resolve, reject) => {
+      const julia = spawn("julia", [
+        "-e",
+        `using Pluto;Pluto.run(port=${port};require_secret_for_open_links=false, require_secret_for_access=false, launch_browser=false)`,
+      ]);
+
+      julia.stdout?.on("data", (data) => {
+        this.outputChannel.append(`[Server Init] ${data}`);
+        if (data.toString().includes("Go to")) {
+          resolve(julia);
+        }
+      });
+
+      julia.stderr?.on("data", (data) => {
+        const chunk = `${data}`;
+        this.outputChannel.append(`[Server Init] ${chunk}`);
+        if (chunk.includes(port.toFixed(0))) {
+          resolve(julia);
+        }
+      });
+
+      julia.on("error", (error) => {
+        this.outputChannel.appendLine(`[Server Init Error] ${error.message}`);
+        reject(error);
+      });
+    });
   }
 
   /**
@@ -33,7 +142,7 @@ export class PlutoManager {
     notebookContent?: string
   ): Promise<Worker | undefined> {
     if (!this.host) {
-      await this.initialize();
+      await this.start();
     }
 
     const notebookPath = notebookUri.fsPath;
@@ -44,7 +153,8 @@ export class PlutoManager {
     if (!worker && this.host) {
       // Create a new worker by uploading notebook content
       if (notebookContent) {
-        worker = await this.host.createWorker(notebookContent);
+        // Trim notebook content as recommended by @plutojl/rainbow
+        worker = await this.host.createWorker(notebookContent.trim());
         this.workers.set(notebookPath, worker);
       } else {
         throw new Error("Cannot create worker without notebook content");
@@ -66,10 +176,9 @@ export class PlutoManager {
     worker: Worker,
     cellId: string,
     code: string
-    // todo: check this type, export and fix upstream
-  ): Promise<{ input: CellInputData; results: CellResultData } | null> {
+  ): Promise<CellResultData | null> {
     try {
-      // Update cell code and run it
+      // Update existing cell code and run it
       await worker.updateSnippetCode(cellId, code, true);
 
       // Wait for execution to complete
@@ -77,9 +186,11 @@ export class PlutoManager {
 
       // Get cell result
       const cellData = worker.getSnippet(cellId);
-      return cellData;
+      return cellData?.results ?? null;
     } catch (error) {
-      console.error("Error executing cell:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`[Cell Execution Error] ${errorMessage}`);
       throw error;
     }
   }
@@ -127,6 +238,11 @@ export class PlutoManager {
       worker.close();
     }
     this.workers.clear();
+
+    // Kill Julia process
+    if (this.juliaProcess) {
+      this.juliaProcess.kill();
+    }
   }
 
   /**
