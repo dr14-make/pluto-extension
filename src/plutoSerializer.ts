@@ -34,7 +34,7 @@ export interface PlutoNotebookData {
 export interface ParsedCell {
   id: string;
   code: string;
-  kind: 'code' | 'markdown';
+  kind: "code" | "markdown";
   metadata: any;
 }
 
@@ -44,12 +44,14 @@ export interface ParsedNotebook {
   pluto_version?: string;
 }
 
-import { parse, serialize } from './rainbowAdapter';
+import { parse, serialize } from "./rainbowAdapter.ts";
 
 /**
  * Parse a Pluto notebook file and extract cells
  */
-export async function parsePlutoNotebook(content: string): Promise<ParsedNotebook> {
+export async function parsePlutoNotebook(
+  content: string,
+): Promise<ParsedNotebook> {
   const notebookData = await parse(content);
 
   const cells: ParsedCell[] = [];
@@ -60,21 +62,21 @@ export async function parsePlutoNotebook(content: string): Promise<ParsedNoteboo
       continue;
     }
 
-    const code = cellInput.code || '';
+    const code = cellInput.code || "";
     const isMarkdown = /^\s*md"/.test(code);
 
     cells.push({
       id: cellId,
       code,
-      kind: isMarkdown ? 'markdown' : 'code',
-      metadata: cellInput.metadata || {}
+      kind: isMarkdown ? "markdown" : "code",
+      metadata: cellInput.metadata || {},
     });
   }
 
   return {
     cells,
     notebook_id: notebookData.notebook_id,
-    pluto_version: notebookData.pluto_version
+    pluto_version: notebookData.pluto_version,
   };
 }
 
@@ -84,7 +86,7 @@ export async function parsePlutoNotebook(content: string): Promise<ParsedNoteboo
 export async function serializePlutoNotebook(
   cells: ParsedCell[],
   notebookId?: string,
-  plutoVersion?: string
+  plutoVersion?: string,
 ): Promise<string> {
   const cellInputs: Record<string, PlutoCellData> = {};
   const cellOrder: string[] = [];
@@ -96,7 +98,7 @@ export async function serializePlutoNotebook(
       cell_id: cellId,
       code: cell.code,
       code_folded: false,
-      metadata: cell.metadata || {}
+      metadata: cell.metadata || {},
     };
 
     cellOrder.push(cellId);
@@ -105,10 +107,10 @@ export async function serializePlutoNotebook(
   const notebookData: PlutoNotebookData = {
     notebook_id: notebookId || generateNotebookId(),
     pluto_version: plutoVersion,
-    path: '',
-    shortpath: '',
+    path: "",
+    shortpath: "",
     in_temp_dir: false,
-    process_status: 'ready',
+    process_status: "ready",
     last_save_time: Date.now() / 1000,
     last_hot_reload_time: 0,
     cell_inputs: cellInputs,
@@ -120,7 +122,7 @@ export async function serializePlutoNotebook(
     bonds: {},
     nbpkg: null,
     metadata: {},
-    status_tree: null
+    status_tree: null,
   };
 
   return await serialize(notebookData);
@@ -137,9 +139,9 @@ export function isMarkdownCell(code: string): boolean {
  * Generate a UUID v4
  */
 export function generateCellId(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
 }
@@ -155,8 +157,9 @@ export function generateNotebookId(): string {
  * Validate Pluto notebook format
  */
 export function isValidPlutoNotebook(content: string): boolean {
-  return content.includes('### A Pluto.jl notebook ###') &&
-         content.includes('╔═╡');
+  return (
+    content.includes("### A Pluto.jl notebook ###") && content.includes("╔═╡")
+  );
 }
 
 /**

@@ -17,6 +17,7 @@ Created comprehensive Jest test suite to validate the `@plutojl/rainbow` parser 
 ## Test Categories
 
 ### 1. Parsing Tests (7 tests) ✅
+
 - ✅ Parse minimal Pluto notebook
 - ✅ Parse cells with proper UUIDs
 - ✅ Parse markdown cells (md""" syntax)
@@ -26,18 +27,22 @@ Created comprehensive Jest test suite to validate the `@plutojl/rainbow` parser 
 - ✅ Handle empty cells gracefully
 
 ### 2. Serialization Tests (2 tests) ✅
+
 - ✅ Serialize a simple notebook
 - ✅ Preserve cell content during serialization
 
 ### 3. Round-trip Tests (2 tests) ✅
+
 - ✅ Parse and serialize without data loss
 - ✅ Preserve cell order during round-trip
 
 ### 4. Error Handling Tests (2 tests) ✅
+
 - ✅ Handle invalid notebook gracefully (throws error)
 - ✅ Handle notebook without cell order section
 
 ### 5. Debug Tests (1 test) ✅
+
 - ✅ Real Pluto format validation
 
 ## Key Findings
@@ -45,6 +50,7 @@ Created comprehensive Jest test suite to validate the `@plutojl/rainbow` parser 
 ### Pluto Notebook Format Requirements
 
 1. **Header Format**:
+
    ```julia
    ### A Pluto.jl notebook ###
    # v0.19.40
@@ -52,6 +58,7 @@ Created comprehensive Jest test suite to validate the `@plutojl/rainbow` parser 
    using Markdown
    using InteractiveUtils
    ```
+
    - Must include the imports after version line
    - Version must be in recognized format
 
@@ -61,6 +68,7 @@ Created comprehensive Jest test suite to validate the `@plutojl/rainbow` parser 
    - Short IDs like "cell-1" are NOT supported
 
 3. **Cell Order Section**:
+
    ```julia
    # ╔═╡ Cell order:
    # ╠═<UUID>  (code cell)
@@ -74,21 +82,25 @@ Created comprehensive Jest test suite to validate the `@plutojl/rainbow` parser 
 ## Test Execution
 
 ### Run All Tests
+
 ```bash
 npm run test:unit
 ```
 
 ### Run Specific Test File
+
 ```bash
 npm run test:unit -- parser.test.ts
 ```
 
 ### Watch Mode
+
 ```bash
 npm run test:watch
 ```
 
 ### Coverage Report
+
 ```bash
 npm run test:coverage
 ```
@@ -96,6 +108,7 @@ npm run test:coverage
 ## Example Files
 
 ### Valid Notebook: `examples/demo.jl`
+
 - Demonstrates all Pluto features
 - Interactive widgets (@bind, Slider, TextField)
 - Plots (Plots.jl)
@@ -107,6 +120,7 @@ npm run test:coverage
 ## Parser Integration
 
 The tests validate that:
+
 1. `@plutojl/rainbow`'s `parse()` function correctly parses Pluto .jl files
 2. `@plutojl/rainbow`'s `serialize()` function generates valid Pluto notebooks
 3. Round-trip serialization preserves all data
