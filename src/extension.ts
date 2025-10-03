@@ -2,65 +2,103 @@ import * as vscode from "vscode";
 import { PlutoNotebookSerializer } from "./serializer.ts";
 import { PlutoNotebookController } from "./controller.ts";
 import { PlutoManager } from "./plutoManager.ts";
+import { UpdateEvent } from "@plutojl/rainbow";
 
-export function activate(context: vscode.ExtensionContext) {
-  console.log("Pluto Notebook extension is now active!");
+/**
+ * Start Pluto server with progress notification
+ */
+async function startServerWithProgress(
+  plutoManager: PlutoManager,
+  message: string = "Pluto server is ready"
+): Promise<void> {
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: "Starting Pluto server...",
+      cancellable: false,
+    },
+    async (progress) => {
+      try {
+        progress.report({ message: "Launching Julia process..." });
+        await plutoManager.start();
+        progress.report({ message: "Server started successfully!" });
+        vscode.window.showInformationMessage(message);
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(
+          `Failed to start Pluto server: ${errorMessage}`
+        );
+        throw error;
+      }
+    }
+  );
+}
 
-  // Create output channel for Pluto Notebook
-  const outputChannel = vscode.window.createOutputChannel("Pluto Notebook");
-  context.subscriptions.push(outputChannel);
+export async function activate(context: vscode.ExtensionContext) {
+  // Create output channels
+  const serverOutputChannel = vscode.window.createOutputChannel("Pluto Server");
+  const controllerOutputChannel =
+    vscode.window.createOutputChannel("Pluto Controller");
+  context.subscriptions.push(serverOutputChannel, controllerOutputChannel);
+
+  serverOutputChannel.appendLine("Pluto Notebook extension is now active!");
 
   // Get port from configuration
   const config = vscode.workspace.getConfiguration("pluto-notebook");
   const port = config.get<number>("port", 1234);
 
   // Initialize Pluto Manager
-  const plutoManager = new PlutoManager(port, outputChannel);
+  const plutoManager = new PlutoManager(port, serverOutputChannel);
   context.subscriptions.push(plutoManager);
 
-  // Start Pluto server
-  plutoManager.start().catch((error: unknown) => {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    vscode.window.showErrorMessage(
-      `Failed to start Pluto server: ${errorMessage}`,
+  // Start Pluto server on activation
+  try {
+    await startServerWithProgress(plutoManager);
+  } catch (error) {
+    // Continue activation even if server fails to start
+    // Users can manually start the server later
+    serverOutputChannel.appendLine(
+      "Extension activated but server failed to start. Use 'Start Server' command to retry."
     );
-  });
+  }
 
   // Register the notebook serializer
   context.subscriptions.push(
     vscode.workspace.registerNotebookSerializer(
       "pluto-notebook",
-      new PlutoNotebookSerializer(),
-    ),
+      new PlutoNotebookSerializer()
+    )
   );
 
   // Register the notebook controller
-  const controller = new PlutoNotebookController(plutoManager);
+  const controller = new PlutoNotebookController(
+    plutoManager,
+    controllerOutputChannel
+  );
   context.subscriptions.push(controller);
+
+  // Initialize workers when notebooks are opened
+  context.subscriptions.push(
+    vscode.workspace.onDidOpenNotebookDocument(async (notebook) => {
+      await controller.registerNotebookDocument(notebook);
+    })
+  );
 
   // Keep the hello world command for testing
   const disposable = vscode.commands.registerCommand(
     "pluto-notebook.helloWorld",
     () => {
       vscode.window.showInformationMessage("Hello World from Pluto Notebook!");
-    },
+    }
   );
   context.subscriptions.push(disposable);
 
   // Register server control commands
   context.subscriptions.push(
     vscode.commands.registerCommand("pluto-notebook.startServer", async () => {
-      try {
-        await plutoManager.start();
-        vscode.window.showInformationMessage("Pluto server started");
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        vscode.window.showErrorMessage(
-          `Failed to start Pluto server: ${errorMessage}`,
-        );
-      }
-    }),
+      await startServerWithProgress(plutoManager, "Pluto server started");
+    })
   );
 
   context.subscriptions.push(
@@ -72,10 +110,10 @@ export function activate(context: vscode.ExtensionContext) {
         const errorMessage =
           error instanceof Error ? error.message : String(error);
         vscode.window.showErrorMessage(
-          `Failed to stop Pluto server: ${errorMessage}`,
+          `Failed to stop Pluto server: ${errorMessage}`
         );
       }
-    }),
+    })
   );
 
   context.subscriptions.push(
@@ -89,11 +127,11 @@ export function activate(context: vscode.ExtensionContext) {
           const errorMessage =
             error instanceof Error ? error.message : String(error);
           vscode.window.showErrorMessage(
-            `Failed to restart Pluto server: ${errorMessage}`,
+            `Failed to restart Pluto server: ${errorMessage}`
           );
         }
-      },
-    ),
+      }
+    )
   );
 }
 

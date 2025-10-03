@@ -1,11 +1,6 @@
 import "@plutojl/rainbow/node-polyfill";
 import * as vscode from "vscode";
-import {
-  CellResultData,
-  Host,
-  UpdateEvent,
-  Worker,
-} from "@plutojl/rainbow";
+import { CellResultData, Host, UpdateEvent, Worker } from "@plutojl/rainbow";
 import { ChildProcess, spawn } from "child_process";
 /**
  * Manages connection to Pluto server and notebook sessions
@@ -21,6 +16,20 @@ export class PlutoManager {
     private outputChannel: vscode.OutputChannel
   ) {
     this.serverUrl = `http://localhost:${port}`;
+  }
+
+  /**
+   * Check if Pluto server is running
+   */
+  isRunning(): boolean {
+    return !!this.juliaProcess && !!this.host;
+  }
+
+  /**
+   * Log message to output channel
+   */
+  log(message: string): void {
+    this.outputChannel.appendLine(message);
   }
 
   /**
@@ -55,6 +64,14 @@ export class PlutoManager {
         this.outputChannel.appendLine(
           `Pluto server exited with code ${code ?? "unknown"}`
         );
+
+        // Show warning if server exits unexpectedly
+        if (code !== 0 && code !== null) {
+          vscode.window.showWarningMessage(
+            `Pluto server stopped unexpectedly with exit code ${code}`
+          );
+        }
+
         this.juliaProcess = undefined;
         this.host = undefined;
       });
@@ -137,10 +154,7 @@ export class PlutoManager {
   /**
    * Get or create a worker for a notebook
    */
-  async getWorker(
-    notebookUri: vscode.Uri,
-    notebookContent?: string
-  ): Promise<Worker | undefined> {
+  async getWorker(notebookUri: vscode.Uri): Promise<Worker | undefined> {
     if (!this.host) {
       await this.start();
     }
@@ -151,13 +165,16 @@ export class PlutoManager {
     let worker = this.workers.get(notebookPath);
 
     if (!worker && this.host) {
-      // Create a new worker by uploading notebook content
-      if (notebookContent) {
-        // Trim notebook content as recommended by @plutojl/rainbow
+      // Read notebook content from file
+      let notebookContent: string;
+      try {
+        const fileContent = await vscode.workspace.fs.readFile(notebookUri);
+        notebookContent = new TextDecoder().decode(fileContent);
         worker = await this.host.createWorker(notebookContent.trim());
         this.workers.set(notebookPath, worker);
-      } else {
-        throw new Error("Cannot create worker without notebook content");
+      } catch (error) {
+        this.outputChannel.appendLine(`Error reading notebook file: ${error}`);
+        throw new Error(`Cannot create worker: failed to read notebook file`);
       }
     }
 
@@ -179,10 +196,10 @@ export class PlutoManager {
   ): Promise<CellResultData | null> {
     try {
       // Update existing cell code and run it
-      await worker.updateSnippetCode(cellId, code, true);
+      const result = await worker.updateSnippetCode(cellId, code, true);
 
       // Wait for execution to complete
-      await worker.wait(true);
+      // await worker.wait(true);
 
       // Get cell result
       const cellData = worker.getSnippet(cellId);
@@ -243,15 +260,5 @@ export class PlutoManager {
     if (this.juliaProcess) {
       this.juliaProcess.kill();
     }
-  }
-
-  /**
-   * Subscribe to notebook updates
-   */
-  onNotebookUpdate(
-    worker: Worker,
-    callback: (event: UpdateEvent) => void
-  ): () => void {
-    return worker.onUpdate(callback);
   }
 }

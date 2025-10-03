@@ -5,10 +5,53 @@ import {
   type ParsedCell,
 } from "./plutoSerializer.ts";
 
+export function proceedCell(cell: ParsedCell): vscode.NotebookCellData {
+  const cellData = new vscode.NotebookCellData(
+    cell.kind === "markdown"
+      ? vscode.NotebookCellKind.Markup
+      : vscode.NotebookCellKind.Code,
+    cell.code,
+    "julia"
+  );
+
+  // Store the cell UUID in metadata for round-trip serialization
+  cellData.metadata = {
+    pluto_cell_id: cell.id,
+    ...cell.metadata,
+  };
+  cellData.outputs = [];
+  return cellData;
+}
+
+export function formatCellOutput(output: any): vscode.NotebookCellOutput {
+  // Handle different output types from Pluto
+  if (output.body) {
+    // HTML output
+    return new vscode.NotebookCellOutput([
+      vscode.NotebookCellOutputItem.text(output.body, "text/html"),
+    ]);
+  } else if (output.text) {
+    // Text output
+    return new vscode.NotebookCellOutput([
+      vscode.NotebookCellOutputItem.text(output.text),
+    ]);
+  } else if (output.error) {
+    // Error output
+    return new vscode.NotebookCellOutput([
+      vscode.NotebookCellOutputItem.error(new Error(output.error)),
+    ]);
+  } else {
+    // Fallback: stringify the output
+    return new vscode.NotebookCellOutput([
+      vscode.NotebookCellOutputItem.text(JSON.stringify(output, null, 2)),
+    ]);
+  }
+}
+
 export class PlutoNotebookSerializer implements vscode.NotebookSerializer {
   async deserializeNotebook(
     content: Uint8Array,
-    _token: vscode.CancellationToken,
+    _token: vscode.CancellationToken
   ): Promise<vscode.NotebookData> {
     const contents = new TextDecoder().decode(content);
 
@@ -16,23 +59,7 @@ export class PlutoNotebookSerializer implements vscode.NotebookSerializer {
       const parsed = await parsePlutoNotebook(contents);
 
       // Convert ParsedCell to VSCode NotebookCellData
-      const cells: vscode.NotebookCellData[] = parsed.cells.map((cell) => {
-        const cellData = new vscode.NotebookCellData(
-          cell.kind === "markdown"
-            ? vscode.NotebookCellKind.Markup
-            : vscode.NotebookCellKind.Code,
-          cell.code,
-          "julia",
-        );
-
-        // Store the cell UUID in metadata for round-trip serialization
-        cellData.metadata = {
-          pluto_cell_id: cell.id,
-          ...cell.metadata,
-        };
-
-        return cellData;
-      });
+      const cells: vscode.NotebookCellData[] = parsed.cells.map(proceedCell);
 
       // Create notebook data with metadata
       const notebookData = new vscode.NotebookData(cells);
@@ -43,13 +70,12 @@ export class PlutoNotebookSerializer implements vscode.NotebookSerializer {
 
       return notebookData;
     } catch (error) {
-      console.error("Error parsing Pluto notebook:", error);
       // Fallback: treat as single code cell if parsing fails
       return new vscode.NotebookData([
         new vscode.NotebookCellData(
           vscode.NotebookCellKind.Code,
           contents,
-          "julia",
+          "julia"
         ),
       ]);
     }
@@ -57,7 +83,7 @@ export class PlutoNotebookSerializer implements vscode.NotebookSerializer {
 
   async serializeNotebook(
     data: vscode.NotebookData,
-    _token: vscode.CancellationToken,
+    _token: vscode.CancellationToken
   ): Promise<Uint8Array> {
     try {
       // Convert VSCode cells to ParsedCell format
@@ -72,12 +98,11 @@ export class PlutoNotebookSerializer implements vscode.NotebookSerializer {
       const serialized = await serializePlutoNotebook(
         cells,
         data.metadata?.pluto_notebook_id as string,
-        data.metadata?.pluto_version as string,
+        data.metadata?.pluto_version as string
       );
 
       return new TextEncoder().encode(serialized);
     } catch (error) {
-      console.error("Error serializing Pluto notebook:", error);
       // Fallback: concatenate all cells
       const contents = data.cells.map((cell) => cell.value).join("\n\n");
       return new TextEncoder().encode(contents);

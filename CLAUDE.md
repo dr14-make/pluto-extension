@@ -85,6 +85,7 @@ TypeScript compilation targets Node16 module system and ES2022 with strict mode 
 ### @plutojl/rainbow Usage
 
 **IMPORTANT**: Always import the node polyfill first:
+
 ```typescript
 import "@plutojl/rainbow/node-polyfill";
 ```
@@ -92,6 +93,7 @@ import "@plutojl/rainbow/node-polyfill";
 **Key API Patterns**:
 
 1. **Creating Worker**: Always trim notebook content before passing to `createWorker`:
+
    ```typescript
    const worker = await host.createWorker(notebookContent.trim());
    await worker.connect();
@@ -104,6 +106,29 @@ import "@plutojl/rainbow/node-polyfill";
 3. **Getting Cell Data**:
    - `worker.getSnippet(cellId)` returns `{ input: CellInputData, results: CellResultData }` or null
    - Use `cellData?.results` to access the output
+
+4. **Minimal Valid Pluto Notebook Format**:
+
+   ```julia
+   ### A Pluto.jl notebook ###
+   # v0.19.40
+
+   using Markdown
+   using InteractiveUtils
+
+   # ╔═╡ <cell-uuid>
+   md"""
+   # Notebook Title
+   """
+
+   # ╔═╡ Cell order:
+   # ╟─<cell-uuid>
+   ```
+
+5. **Markdown Cells**:
+   - Pluto markdown cells are wrapped in `md"""..."""`
+   - When deserializing, extract content from wrapper
+   - When serializing, wrap markdown content back
 
 ## Current Status
 
@@ -125,3 +150,78 @@ Placeholder implementation:
 3. Implement real cell execution in controller
 4. Handle rich outputs (HTML, plots, images)
 5. Support Pluto's reactive evaluation model
+
+### Rainbow usage example
+
+```js
+import "@plutojl/rainbow/node-polyfill";
+import { spawn, ChildProcess } from "child_process";
+import {
+  Host,
+  Worker,
+  from_julia,
+  getResult,
+  resolveIncludes,
+} from "@plutojl/rainbow";
+import fs from "fs";
+
+function runServer(port: number = 1234): Promise<ChildProcess> {
+  return new Promise((resolve, reject) => {
+    const julia = spawn("julia", [
+      "-e",
+      `using Pluto;Pluto.run(port=${port};require_secret_for_open_links=false, require_secret_for_access=false, launch_browser=false)`,
+    ]);
+
+    julia.stdout?.on("data", (data) => {
+      console.log(`Julia stdout: ${data}`);
+      if (data.toString().includes("Go to")) {
+        resolve(julia);
+      }
+    });
+
+    julia.stderr?.on("data", (data) => {
+      const chunk = `${data}`;
+      if (chunk.includes(port.toFixed(0))) {
+        resolve(julia);
+      }
+    });
+
+    julia.on("error", reject);
+  });
+}
+
+async function runAnalysis(
+  entryPoint: string = "../src/ElectricalComponents.jl",
+  analysisName: string
+): Promise<any> {
+  const host = new Host("http://localhost:1234");
+
+  try {
+    const notebook = from_julia(resolveIncludes(fs, entryPoint), {
+      DyadEcosystemDependencies: {
+        uuid: "7bc808db-8006-421e-b546-062440d520b7",
+        compat: "=0.10.3",
+      },
+    });
+    console.log(`Notebook\n${notebook}`);
+    fs.writeFileSync("notebook.jl", notebook);
+    const worker = await host.createWorker(notebook.trim());
+    await worker.connect();
+
+    const result = await worker.waitSnippet(
+      0,
+      `begin
+            solution = ${analysisName}()
+            Dict(string(key) => DyadInterface.artifacts(solution, key) for key in DyadInterface.artifacts(solution))
+        end`
+    );
+
+    return result;
+  } catch (error) {
+    console.error(`Failed to run analysis ${analysisName}:`, error);
+    throw error;
+  }
+}
+
+export { runServer, runAnalysis };
+```

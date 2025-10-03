@@ -1,169 +1,192 @@
 import * as vscode from "vscode";
 import { PlutoManager } from "./plutoManager.ts";
-import { Worker } from "@plutojl/rainbow";
+import { UpdateEvent } from "@plutojl/rainbow";
+import { formatCellOutput } from "./serializer.ts";
 
 export class PlutoNotebookController {
   readonly controllerId = "pluto-notebook-controller";
   readonly notebookType = "pluto-notebook";
   readonly label = "Pluto Notebook";
   readonly supportedLanguages = ["julia"];
-
-  private readonly _controller: vscode.NotebookController;
-  private readonly _plutoManager: PlutoManager;
+  private readonly controller: vscode.NotebookController;
   private _executionOrder = 0;
-  private _workers: Map<string, Worker> = new Map(); // notebook URI -> Worker
+  private plutoNotebookMap: Map<string, vscode.Uri> = new Map();
+  private executeHandler = (
+    cells: vscode.NotebookCell[],
+    notebook: vscode.NotebookDocument,
+    controller: vscode.NotebookController
+  ): void | Thenable<void> => {
+    for (const cell of cells) {
+      this._doExecution(cell, notebook);
+    }
+  };
 
-  constructor(plutoManager: PlutoManager) {
-    this._controller = vscode.notebooks.createNotebookController(
+  private interruptHandler = async (notebook: vscode.NotebookDocument) => {
+    const worker = await this.plutoManager.getWorker(notebook.uri);
+    if (worker) {
+      try {
+        await worker.interrupt();
+        vscode.window.showInformationMessage("Notebook execution interrupted");
+      } catch (error) {
+        this.outputChannel.appendLine(`Error interrupting notebook: ${error}`);
+        vscode.window.showErrorMessage("Failed to interrupt execution");
+      }
+    }
+  };
+
+  constructor(
+    private readonly plutoManager: PlutoManager,
+    private readonly outputChannel: vscode.OutputChannel
+  ) {
+    this.controller = vscode.notebooks.createNotebookController(
       this.controllerId,
       this.notebookType,
       this.label
     );
 
-    this._controller.supportedLanguages = this.supportedLanguages;
-    this._controller.supportsExecutionOrder = true;
-    this._controller.executeHandler = this._execute.bind(this);
-
-    // Initialize Pluto manager
-    this._plutoManager = plutoManager;
+    this.controller.supportedLanguages = this.supportedLanguages;
+    this.controller.supportsExecutionOrder = true;
+    this.controller.executeHandler = this.executeHandler;
+    this.controller.interruptHandler = this.interruptHandler;
   }
 
-  dispose(): void {
-    this._controller.dispose();
-    this._plutoManager.dispose();
-  }
+  private onNotebookUpdate = (notebook: vscode.NotebookDocument) => {
+    return (event: UpdateEvent) => {
+      this.outputChannel.appendLine(
+        // TODO HERE WE NEED SOMEHOW TO UPDATE THE STATE OF ALL THE CELLS
+        `Update event: ${notebook.uri} ${event.type}`
+      );
 
-  private _execute(
-    cells: vscode.NotebookCell[],
-    notebook: vscode.NotebookDocument,
-    _controller: vscode.NotebookController
-  ): void {
-    for (const cell of cells) {
-      this._doExecution(cell, notebook);
+      // if (event.notebook) {
+      //   const order = event.notebook.cell_order
+      //   for (let index = 0; index < array.length; index++) {
+      //     const element = array[index];
+      //     for( const cellId of event.notebook.cell_order) {
+
+      //     }
+      //   }
+      // }
+      // const cells = notebook.getCells();
+      // for (const cell of cells) {
+      //   cell
+      //   // this._doExecution(cell, notebook);
+      // }
+    };
+  };
+
+  async registerNotebookDocument(notebook: vscode.NotebookDocument) {
+    if (notebook.notebookType === "pluto-notebook") {
+      this.outputChannel.appendLine(`Notebook opened: ${notebook.uri.fsPath}`);
+
+      // Only initialize if server is running
+      if (this.plutoManager.isRunning()) {
+        try {
+          const worker = await this.plutoManager.getWorker(notebook.uri);
+          if (worker) {
+            this.plutoNotebookMap.set(worker.notebook_id, notebook.uri);
+
+            this.outputChannel.appendLine(
+              `Worker initialized for: ${notebook.uri.fsPath}`
+            );
+
+            // Subscribe to updates from this worker
+            worker.onUpdate(this.onNotebookUpdate(notebook));
+          }
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          this.outputChannel.appendLine(
+            `Failed to initialize worker: ${errorMessage}`
+          );
+          vscode.window.showErrorMessage(
+            `Failed to initialize Pluto notebook: ${errorMessage}`
+          );
+        }
+      } else {
+        this.outputChannel.appendLine(
+          "Server not running - worker will be initialized on first execution"
+        );
+      }
     }
+  }
+  dispose(): void {
+    this.controller.dispose();
+    this.plutoManager.dispose();
   }
 
   private async _doExecution(
     cell: vscode.NotebookCell,
     notebook: vscode.NotebookDocument
   ): Promise<void> {
-    const execution = this._controller.createNotebookCellExecution(cell);
+    const execution = this.controller.createNotebookCellExecution(cell);
     execution.executionOrder = ++this._executionOrder;
     execution.start(Date.now());
 
     try {
-      // Get or create worker for this notebook
-      let worker = this._workers.get(notebook.uri.toString());
+      // Check if server is running
+      if (!this.plutoManager.isRunning()) {
+        throw new Error(
+          "Pluto server is not running. Please start the server first."
+        );
+      }
+
+      // Get worker for this notebook (should already exist from onDidOpenNotebookDocument)
+      const worker = await this.plutoManager.getWorker(notebook.uri);
 
       if (!worker) {
-        // Read notebook content for initial worker creation
-        const notebookContent = await this._getNotebookContent(notebook);
-        worker = await this._plutoManager.getWorker(
-          notebook.uri,
-          notebookContent
+        vscode.window.showErrorMessage(
+          `Failed to initialize Pluto notebook: Failed to create worker`
         );
-        if (!worker) {
-          throw new Error("Failed to create worker");
-        }
-
-        this._workers.set(notebook.uri.toString(), worker);
-        // Subscribe to updates
-        this._plutoManager.onNotebookUpdate(worker, (event: any) => {
-          this._handleNotebookUpdate(notebook, event);
-        });
+        return;
       }
 
       // Get cell ID from metadata
       const cellId = cell.metadata?.pluto_cell_id as string;
       if (!cellId) {
-        throw new Error("Cell missing Pluto cell ID");
+        vscode.window.showErrorMessage(
+          `Failed to initialize Pluto notebook:Cell missing Pluto cell ID`
+        );
+        return;
       }
 
       // Execute the cell
       const code = cell.document.getText();
-      const cellData = await this._plutoManager.executeCell(
+      const cellData = await this.plutoManager.executeCell(
         worker,
         cellId,
         code
       );
 
+      // TODO WE need to wait how event use global events and some sort of map
+
       // Format and display output
       if (cellData) {
-        const output = this._formatCellOutput(cellData);
+        const output = formatCellOutput(cellData);
         execution.replaceOutput([output]);
       } else {
         // No output or still running
-        execution.replaceOutput([
-          new vscode.NotebookCellOutput([
-            vscode.NotebookCellOutputItem.text("Cell executed successfully"),
-          ]),
-        ]);
+        vscode.window.showInformationMessage(`Cell executed successfully`);
       }
 
       execution.end(true, Date.now());
     } catch (error) {
-      console.error("Error executing cell:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.outputChannel.appendLine(`Error executing cell: ${errorMessage}`);
+
       execution.replaceOutput([
         new vscode.NotebookCellOutput([
           vscode.NotebookCellOutputItem.error(error as Error),
         ]),
       ]);
       execution.end(false, Date.now());
+
+      // Show error notification for critical failures
+      if (errorMessage.includes("server") || errorMessage.includes("worker")) {
+        vscode.window.showErrorMessage(
+          `Cell execution failed: ${errorMessage}`
+        );
+      }
     }
-  }
-
-  private async _getNotebookContent(
-    notebook: vscode.NotebookDocument
-  ): Promise<string> {
-    // Read the raw notebook file content
-    try {
-      const fileContent = await vscode.workspace.fs.readFile(notebook.uri);
-      return new TextDecoder().decode(fileContent);
-    } catch (error) {
-      console.error("Error reading notebook file:", error);
-      // Fallback: serialize current notebook state
-      return "### A Pluto.jl notebook ###\n# v0.19.0\n";
-    }
-  }
-
-  private _formatCellOutput(output: any): vscode.NotebookCellOutput {
-    // Handle different output types from Pluto
-    if (output.body) {
-      // HTML output
-      return new vscode.NotebookCellOutput([
-        vscode.NotebookCellOutputItem.text(output.body, "text/html"),
-      ]);
-    } else if (output.text) {
-      // Text output
-      return new vscode.NotebookCellOutput([
-        vscode.NotebookCellOutputItem.text(output.text),
-      ]);
-    } else if (output.error) {
-      // Error output
-      return new vscode.NotebookCellOutput([
-        vscode.NotebookCellOutputItem.error(new Error(output.error)),
-      ]);
-    } else {
-      // Fallback: stringify the output
-      return new vscode.NotebookCellOutput([
-        vscode.NotebookCellOutputItem.text(JSON.stringify(output, null, 2)),
-      ]);
-    }
-  }
-
-  private _handleNotebookUpdate(
-    notebook: vscode.NotebookDocument,
-    event: any
-  ): void {
-    // Handle real-time updates from Pluto server
-    // This could update cell outputs, execution states, etc.
-    console.log("Notebook update:", event);
-
-    // TODO: Implement update handling based on event type
-    // For example:
-    // - cell_updated: update specific cell output
-    // - cells_added: add new cells
-    // - cells_deleted: remove cells
-    // - notebook_restarted: clear all outputs
   }
 }
