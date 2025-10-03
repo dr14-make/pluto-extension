@@ -9,7 +9,6 @@ export class PlutoNotebookController {
   readonly label = "Pluto Notebook";
   readonly supportedLanguages = ["julia"];
   private readonly controller: vscode.NotebookController;
-  private _executionOrder = 0;
   private plutoNotebookMap: Map<string, vscode.Uri> = new Map();
   private executeHandler = (
     cells: vscode.NotebookCell[],
@@ -52,25 +51,32 @@ export class PlutoNotebookController {
 
   private onNotebookUpdate = (notebook: vscode.NotebookDocument) => {
     return (event: UpdateEvent) => {
-      this.outputChannel.appendLine(
-        // TODO HERE WE NEED SOMEHOW TO UPDATE THE STATE OF ALL THE CELLS
-        `Update event: ${notebook.uri} ${event.type}`
-      );
-
-      // if (event.notebook) {
-      //   const order = event.notebook.cell_order
-      //   for (let index = 0; index < array.length; index++) {
-      //     const element = array[index];
-      //     for( const cellId of event.notebook.cell_order) {
-
-      //     }
-      //   }
-      // }
-      // const cells = notebook.getCells();
-      // for (const cell of cells) {
-      //   cell
-      //   // this._doExecution(cell, notebook);
-      // }
+      try {
+        this.outputChannel.appendLine(
+          // TODO HERE WE NEED SOMEHOW TO UPDATE THE STATE OF ALL THE CELLS
+          `Update event: ${notebook.uri} ${event.type}`
+        );
+        if (event.type === "notebook_updated" && event.notebook) {
+          const cellsOrder = event.notebook.cell_order;
+          for (let index = 0; index < cellsOrder.length; index++) {
+            const cellId = cellsOrder[index];
+            const cellData = event.notebook.cell_results[cellId];
+            const notebookCell = notebook.cellAt(index);
+            const execution =
+              this.controller.createNotebookCellExecution(notebookCell);
+            execution.start(Date.now());
+            execution.replaceOutput(formatCellOutput(cellData.output));
+            execution.end(true, Date.now());
+          }
+        } else if (event.type === "cells_updated") {
+          console.log("Cell updated");
+        }
+      } catch (e: any) {
+        this.outputChannel.appendLine(
+          // TODO HERE WE NEED SOMEHOW TO UPDATE THE STATE OF ALL THE CELLS
+          `Failed update: ${e.message}`
+        );
+      }
     };
   };
 
@@ -119,7 +125,6 @@ export class PlutoNotebookController {
     notebook: vscode.NotebookDocument
   ): Promise<void> {
     const execution = this.controller.createNotebookCellExecution(cell);
-    execution.executionOrder = ++this._executionOrder;
     execution.start(Date.now());
 
     try {
@@ -161,7 +166,7 @@ export class PlutoNotebookController {
 
       // Format and display output
       if (cellData) {
-        const output = formatCellOutput(cellData);
+        const output = formatCellOutput(cellData.output);
         execution.replaceOutput([output]);
       } else {
         // No output or still running

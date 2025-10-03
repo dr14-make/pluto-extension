@@ -4,6 +4,7 @@ import {
   serializePlutoNotebook,
   type ParsedCell,
 } from "./plutoSerializer.ts";
+import { CellResultData } from "@plutojl/rainbow";
 
 export function proceedCell(cell: ParsedCell): vscode.NotebookCellData {
   const cellData = new vscode.NotebookCellData(
@@ -19,26 +20,17 @@ export function proceedCell(cell: ParsedCell): vscode.NotebookCellData {
     pluto_cell_id: cell.id,
     ...cell.metadata,
   };
-  cellData.outputs = [];
   return cellData;
 }
 
-export function formatCellOutput(output: any): vscode.NotebookCellOutput {
+export function formatCellOutput(
+  output: CellResultData["output"]
+): vscode.NotebookCellOutput {
   // Handle different output types from Pluto
   if (output.body) {
     // HTML output
     return new vscode.NotebookCellOutput([
-      vscode.NotebookCellOutputItem.text(output.body, "text/html"),
-    ]);
-  } else if (output.text) {
-    // Text output
-    return new vscode.NotebookCellOutput([
-      vscode.NotebookCellOutputItem.text(output.text),
-    ]);
-  } else if (output.error) {
-    // Error output
-    return new vscode.NotebookCellOutput([
-      vscode.NotebookCellOutputItem.error(new Error(output.error)),
+      vscode.NotebookCellOutputItem.text(output.body, output.mime),
     ]);
   } else {
     // Fallback: stringify the output
