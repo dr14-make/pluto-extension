@@ -3,13 +3,32 @@ import { PlutoManager } from "./plutoManager.ts";
 import { UpdateEvent } from "@plutojl/rainbow";
 import { formatCellOutput } from "./serializer.ts";
 
+// --- START: Merged Interfaces ---
+
+/** A unique identifier for a cell, typically a UUID string. */
+type CellId = string;
+
+/** An RFC 6902 JSON Patch operation. */
+interface Patch {
+  op: "add" | "remove" | "replace" | "move" | "copy" | "test";
+  path: (string | number)[];
+  value?: any;
+  from?: (string | number)[];
+}
+// --- END: Merged Interfaces ---
+
 export class PlutoNotebookController {
   readonly controllerId = "pluto-notebook-controller";
   readonly notebookType = "pluto-notebook";
   readonly label = "Pluto Notebook";
   readonly supportedLanguages = ["julia"];
   private readonly controller: vscode.NotebookController;
+  // Map to store Pluto notebook ID to VS Code URI (only used for the worker lookup)
   private plutoNotebookMap: Map<string, vscode.Uri> = new Map();
+  // Map to track active VS Code execution objects for streaming updates
+  private activeExecutions: Map<CellId, vscode.NotebookCellExecution> =
+    new Map();
+
   private executeHandler = (
     cells: vscode.NotebookCell[],
     notebook: vscode.NotebookDocument,
@@ -24,6 +43,12 @@ export class PlutoNotebookController {
     const worker = await this.plutoManager.getWorker(notebook.uri);
     if (worker) {
       try {
+        // Find all currently running executions and mark them as failed
+        for (const [cellId, execution] of this.activeExecutions.entries()) {
+          execution.end(false, Date.now());
+          this.activeExecutions.delete(cellId);
+        }
+
         await worker.interrupt();
         vscode.window.showInformationMessage("Notebook execution interrupted");
       } catch (error) {
@@ -49,32 +74,155 @@ export class PlutoNotebookController {
     this.controller.interruptHandler = this.interruptHandler;
   }
 
+  /**
+   * Finds the VS Code cell associated with a Pluto cell ID.
+   */
+  private getCellByPlutoId(
+    notebook: vscode.NotebookDocument,
+    plutoCellId: CellId
+  ): vscode.NotebookCell | undefined {
+    for (const cell of notebook.getCells()) {
+      const cellId = cell.metadata?.pluto_cell_id as string;
+      if (cellId === plutoCellId) {
+        return cell;
+      }
+    }
+    return undefined;
+  }
+
+  startExecution(
+    cellId: CellId,
+    notebook: vscode.NotebookDocument
+  ): vscode.NotebookCellExecution {
+    let execution = this.activeExecutions.get(cellId);
+    if (!execution) {
+      this.outputChannel.appendLine(
+        `[EXEC INIT] Starting initial execution for cell ${cellId}`
+      );
+      const notebookCell = this.getCellByPlutoId(notebook, cellId);
+      if (!notebookCell) {
+        throw new Error("Can not determine notebook cell");
+      }
+      execution = this.controller.createNotebookCellExecution(notebookCell);
+      this.activeExecutions.set(cellId, execution);
+      execution.start(Date.now());
+    }
+    return execution;
+  }
+  /**
+   * Handles cell-specific patch updates (execution status, output, logs).
+   */
+  private _handleCellPatch(
+    notebook: vscode.NotebookDocument,
+    patch: Patch,
+    fullNotebookState: any
+  ) {
+    const path = patch.path;
+    const cellId = path[1] as CellId;
+
+    const currentCellState = fullNotebookState.cell_results[cellId];
+    const segment2 = path[2];
+
+    // 1. Update Cell Execution Status (queued, running)
+    const isStarting =
+      patch.value === true && (segment2 === "queued" || segment2 === "running");
+
+    if (isStarting) {
+      // Start execution
+      this.startExecution(cellId, notebook);
+    }
+
+    // 2. Update Cell Output (only if an execution object exists)
+    if (segment2 === "output") {
+      // Handle final output/result update
+      const execution = this.startExecution(cellId, notebook);
+      if (currentCellState?.output) {
+        execution.replaceOutput(formatCellOutput(currentCellState.output));
+        this.outputChannel.appendLine(
+          `[OUTPUT] Cell ${cellId} output updated.`
+        );
+      }
+      execution.end(true, Date.now());
+      this.activeExecutions.delete(cellId);
+      this.outputChannel.appendLine(`[EXEC END] Cell ${cellId} finished.`);
+    } else if (segment2 === "logs") {
+      // Handle streaming logs (logs are added, path.length === 4, or array is cleared)
+      if (patch.op === "add" && path.length === 4 && currentCellState?.logs) {
+        const lastLog = currentCellState.logs[currentCellState.logs.length - 1];
+        if (lastLog) {
+          // Log the raw event to the output channel
+          this.outputChannel.appendLine(
+            `[CELL LOG] ${cellId}: ${lastLog.msg.join("")}`
+          );
+          // A proper implementation would update the cell's log output here.
+        }
+      }
+    }
+
+    // 3. Update Cell Metadata/Runtime
+    if (segment2 === "runtime") {
+      this.outputChannel.appendLine(
+        `[UpdateMetadata] Cell ${cellId} runtime recorded: ${patch.value} ns`
+      );
+    }
+  }
+
+  /**
+   * Handles streaming updates from the Pluto worker via patches.
+   */
   private onNotebookUpdate = (notebook: vscode.NotebookDocument) => {
     return (event: UpdateEvent) => {
       try {
-        this.outputChannel.appendLine(
-          // TODO HERE WE NEED SOMEHOW TO UPDATE THE STATE OF ALL THE CELLS
-          `Update event: ${notebook.uri} ${event.type}`
-        );
-        if (event.type === "notebook_updated" && event.notebook) {
-          const cellsOrder = event.notebook.cell_order;
-          for (let index = 0; index < cellsOrder.length; index++) {
-            const cellId = cellsOrder[index];
-            const cellData = event.notebook.cell_results[cellId];
-            const notebookCell = notebook.cellAt(index);
-            const execution =
-              this.controller.createNotebookCellExecution(notebookCell);
-            execution.start(Date.now());
-            execution.replaceOutput(formatCellOutput(cellData.output));
-            execution.end(true, Date.now());
+        const patches = (event.data as any)?.patches as Patch[] | undefined;
+        const fullNotebookState = (event.data as any)?.notebook;
+
+        if (!patches || !fullNotebookState) {
+          this.outputChannel.appendLine(
+            `Received non-patch update or missing state: ${event.type}`
+          );
+          return;
+        }
+
+        for (const patch of patches) {
+          const path = patch.path;
+          const [segment0, segment1] = path;
+
+          if (segment0 === "cell_results" && typeof segment1 === "string") {
+            // --- Cell-Specific Update ---
+            this._handleCellPatch(notebook, patch, fullNotebookState);
+          } else if (segment0 === "process_status" && path.length === 1) {
+            // --- Global Kernel Status Update ---
+            this.outputChannel.appendLine(
+              `[UpdateKernelStatus] Kernel process status changed to: ${patch.value}`
+            );
+            vscode.window.showInformationMessage(
+              `Pluto Kernel status: ${patch.value}`
+            );
+          } else if (segment0 === "nbpkg") {
+            // --- Package Management Status ---
+            this.outputChannel.appendLine(
+              `[LogInternal] Package environment setting changed: ${segment1} = ${patch.value}`
+            );
+          } else if (
+            segment0 === "status_tree" ||
+            segment0 === "last_save_time"
+          ) {
+            // --- Internal Metadata/Status Tree Update ---
+            this.outputChannel.appendLine(
+              `[LogInternal] Internal status updated: /${path.join("/")}`
+            );
+          } else {
+            // --- Fallback ---
+            this.outputChannel.appendLine(
+              `[LogInternal] Unrecognized patch path. Op: ${
+                patch.op
+              } Path: /${path.join("/")}`
+            );
           }
-        } else if (event.type === "cells_updated") {
-          console.log("Cell updated");
         }
       } catch (e: any) {
         this.outputChannel.appendLine(
-          // TODO HERE WE NEED SOMEHOW TO UPDATE THE STATE OF ALL THE CELLS
-          `Failed update: ${e.message}`
+          `Failed to process patch update: ${e.message}`
         );
       }
     };
@@ -124,67 +272,53 @@ export class PlutoNotebookController {
     cell: vscode.NotebookCell,
     notebook: vscode.NotebookDocument
   ): Promise<void> {
-    const execution = this.controller.createNotebookCellExecution(cell);
-    execution.start(Date.now());
+    // Execution lifecycle is now managed by the streaming patches in onNotebookUpdate.
+    // Here, we just submit the job and the streaming updates will handle start/end/output.
+    // If an execution is already active, reuse it, otherwise create a placeholder.
+
+    const cellId = cell.metadata?.pluto_cell_id as string;
+    if (!cellId) {
+      vscode.window.showErrorMessage(`Cell missing Pluto cell ID`);
+      return;
+    }
+
+    // Ensure there is at least an initial execution object for this cell
+    let execution = this.startExecution(cellId, notebook);
 
     try {
-      // Check if server is running
       if (!this.plutoManager.isRunning()) {
         throw new Error(
           "Pluto server is not running. Please start the server first."
         );
       }
 
-      // Get worker for this notebook (should already exist from onDidOpenNotebookDocument)
       const worker = await this.plutoManager.getWorker(notebook.uri);
 
       if (!worker) {
-        vscode.window.showErrorMessage(
-          `Failed to initialize Pluto notebook: Failed to create worker`
-        );
-        return;
+        throw new Error(`Failed to initialize Pluto worker.`);
       }
 
-      // Get cell ID from metadata
-      const cellId = cell.metadata?.pluto_cell_id as string;
-      if (!cellId) {
-        vscode.window.showErrorMessage(
-          `Failed to initialize Pluto notebook:Cell missing Pluto cell ID`
-        );
-        return;
-      }
-
-      // Execute the cell
+      // Execute the cell. This sends the message to the Pluto kernel.
       const code = cell.document.getText();
-      const cellData = await this.plutoManager.executeCell(
-        worker,
-        cellId,
-        code
-      );
 
-      // TODO WE need to wait how event use global events and some sort of map
+      // The worker will handle the execution and stream updates back via onNotebookUpdate.
+      await this.plutoManager.executeCell(worker, cellId, code);
 
-      // Format and display output
-      if (cellData) {
-        const output = formatCellOutput(cellData.output);
-        execution.replaceOutput([output]);
-      } else {
-        // No output or still running
-        vscode.window.showInformationMessage(`Cell executed successfully`);
-      }
-
-      execution.end(true, Date.now());
+      // We do NOT call execution.end() here. The `onNotebookUpdate` listener
+      // will handle `execution.end()` when it receives the final 'running: false' patch.
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       this.outputChannel.appendLine(`Error executing cell: ${errorMessage}`);
 
-      execution.replaceOutput([
+      // If an error occurred BEFORE even talking to the kernel, we end the execution immediately.
+      execution?.replaceOutput([
         new vscode.NotebookCellOutput([
           vscode.NotebookCellOutputItem.error(error as Error),
         ]),
       ]);
-      execution.end(false, Date.now());
+      execution?.end(false, Date.now());
+      this.activeExecutions.delete(cellId);
 
       // Show error notification for critical failures
       if (errorMessage.includes("server") || errorMessage.includes("worker")) {
