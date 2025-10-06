@@ -1,3 +1,5 @@
+/** @jsxImportSource preact */
+
 interface PlutoOutputProps {
   output: {
     mime: string;
