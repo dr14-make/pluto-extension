@@ -38,16 +38,10 @@ export function parsePlutoNotebook(content: string): ParsedNotebook {
     }
 
     const code = cellInput.code || "";
-    const isMarkdown = isMarkdownCell(code);
+    const isMarkdown = false;
 
     // Extract markdown content from md"""...""" wrapper
     let cellCode = code;
-    if (isMarkdown) {
-      const match = code.match(/^\s*md"""([\s\S]*?)"""\s*$/m);
-      if (match) {
-        cellCode = match[1];
-      }
-    }
 
     cells.push({
       id: cellId,

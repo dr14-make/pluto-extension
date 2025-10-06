@@ -18,6 +18,7 @@ export function proceedCell(cell: ParsedCell): vscode.NotebookCellData {
   // Store the cell UUID in metadata for round-trip serialization
   cellData.metadata = {
     pluto_cell_id: cell.id,
+    inputCollapsed: true,
     ...cell.metadata,
   };
   return cellData;
