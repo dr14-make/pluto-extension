@@ -137,16 +137,15 @@ export class PlutoManager {
       });
 
       julia.stderr?.on("data", (data) => {
-        const chunk = `${data}`;
-        this.outputChannel.append(`[Server Init] ${chunk}`);
-        if (chunk.includes(port.toFixed(0))) {
+        this.outputChannel.append(`[Server Init] ${data}`);
+        if (data.toString().includes("Go to")) {
           resolve(julia);
         }
       });
 
       julia.on("error", (error) => {
         this.outputChannel.appendLine(`[Server Init Error] ${error.message}`);
-        reject(error);
+        setTimeout(() => reject(error), 1000);
       });
     });
   }
