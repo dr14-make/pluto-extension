@@ -1,3 +1,5 @@
+import { postMessageToController } from "../renderer";
+
 /** @jsxImportSource preact */
 
 interface PlutoOutputProps {
@@ -8,6 +10,17 @@ interface PlutoOutputProps {
 }
 
 export function PlutoOutput({ output }: PlutoOutputProps) {
+  // Example: Send a ping message to the controller when component mounts
+  // In a real implementation, you would use this for interactive features
+  const handleExampleInteraction = () => {
+    postMessageToController({
+      type: "bond",
+      name: "n",
+      value: Math.round(100 * Math.random()),
+      timestamp: Date.now(),
+    });
+  };
+
   const decodeBody = (body: string | Uint8Array): string => {
     if (typeof body === "string") {
       return body;
@@ -32,42 +45,78 @@ export function PlutoOutput({ output }: PlutoOutputProps) {
     case "image/bmp":
     case "image/svg+xml": {
       const decoded = decodeBody(output.body);
-      return <div dangerouslySetInnerHTML={{ __html: decoded }} />;
+      return (
+        <div
+          onClick={handleExampleInteraction}
+          dangerouslySetInnerHTML={{ __html: decoded }}
+        />
+      );
     }
 
     case "text/plain": {
       const text = decodeBody(output.body);
-      return <pre>{text}</pre>;
+      return <pre onClick={handleExampleInteraction}>{text}</pre>;
     }
 
     case "text/html": {
       const html = decodeBody(output.body);
-      return <div dangerouslySetInnerHTML={{ __html: html }} />;
+      return (
+        <div
+          onClick={handleExampleInteraction}
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      );
     }
 
     case "application/vnd.pluto.tree+object": {
-      return <PlutoTree data={output.body} />;
+      return (
+        <PlutoTree onClick={handleExampleInteraction} data={output.body} />
+      );
     }
 
     case "application/vnd.pluto.table+object": {
-      return <PlutoTable data={output.body} />;
+      return (
+        <PlutoTable onClick={handleExampleInteraction} data={output.body} />
+      );
     }
 
     case "application/vnd.pluto.parseerror+object": {
-      return <PlutoParseError data={output.body} />;
+      return (
+        <PlutoParseError
+          onClick={handleExampleInteraction}
+          data={output.body}
+        />
+      );
     }
 
     case "application/vnd.pluto.stacktrace+object": {
-      return <PlutoStackTrace data={output.body} />;
+      return (
+        <PlutoStackTrace
+          onClick={handleExampleInteraction}
+          data={output.body}
+        />
+      );
     }
 
     case "application/vnd.pluto.divelement+object": {
-      return <PlutoDivElement data={output.body} />;
+      return (
+        <PlutoDivElement
+          onClick={handleExampleInteraction}
+          data={output.body}
+        />
+      );
     }
 
     default: {
       const content = decodeBody(output.body);
-      return <div dangerouslySetInnerHTML={{ __html: content }} />;
+      // Example: Add onClick handler to demonstrate messaging
+      // In a real implementation, this would be used for interactive outputs
+      return (
+        <div
+          dangerouslySetInnerHTML={{ __html: content }}
+          onClick={handleExampleInteraction}
+        />
+      );
     }
   }
 }

@@ -28,6 +28,8 @@ export class PlutoNotebookController {
   // Map to track active VS Code execution objects for streaming updates
   private activeExecutions: Map<CellId, vscode.NotebookCellExecution> =
     new Map();
+  // Renderer messaging API
+  private rendererMessaging?: vscode.NotebookRendererMessaging;
 
   private executeHandler = (
     cells: vscode.NotebookCell[],
@@ -72,6 +74,68 @@ export class PlutoNotebookController {
     this.controller.supportsExecutionOrder = true;
     this.controller.executeHandler = this.executeHandler;
     this.controller.interruptHandler = this.interruptHandler;
+
+    // Setup messaging bridge between controller and renderer
+    this.setupMessaging();
+  }
+
+  /**
+   * Setup communication bridge between controller and renderer
+   */
+  private setupMessaging(): void {
+    // Create messaging API for communicating with the renderer
+    this.rendererMessaging = vscode.notebooks.createRendererMessaging(
+      "pluto-output-renderer"
+    );
+
+    // Listen for messages from the renderer (PlutoOutput component)
+    this.rendererMessaging.onDidReceiveMessage((event) => {
+      this.handleRendererMessage(event);
+    });
+  }
+
+  /**
+   * Handle messages received from the renderer
+   */
+  private async handleRendererMessage(event: {
+    editor: vscode.NotebookEditor;
+    message: any;
+  }): Promise<void> {
+    const { editor, message } = event;
+
+    this.outputChannel.appendLine(
+      `[RENDERER MESSAGE] Received: ${JSON.stringify(message)}`
+    );
+
+    // Placeholder: Handle different message types from renderer
+    switch (message.type) {
+      case "bond":
+        const worker = await this.plutoManager.getWorker(editor.notebook.uri);
+        await worker?.setBond(message.name, message.value);
+        this.outputChannel.appendLine(
+          `[RENDERER MESSAGE] Bond set${message.name}=${message.value}!`
+        );
+        break;
+      default:
+        this.outputChannel.appendLine(`[UNKNOWN MESSAGE TYPE] ${message.type}`);
+    }
+  }
+
+  /**
+   * Send a message to the renderer for a specific notebook
+   */
+  sendMessageToRenderer(notebook: vscode.NotebookDocument, message: any): void {
+    // Find the active editor for this notebook
+    const editor = vscode.window.visibleNotebookEditors.find(
+      (e) => e.notebook === notebook
+    );
+
+    if (editor && this.rendererMessaging) {
+      this.rendererMessaging.postMessage(message, editor);
+      this.outputChannel.appendLine(
+        `[CONTROLLER MESSAGE] Sent: ${JSON.stringify(message)}`
+      );
+    }
   }
 
   /**
@@ -264,6 +328,7 @@ export class PlutoNotebookController {
   }
   dispose(): void {
     this.controller.dispose();
+    // NotebookRendererMessaging doesn't have a dispose method
     this.plutoManager.dispose();
   }
 
