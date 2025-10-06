@@ -41,7 +41,8 @@ async function main() {
     console.warn("Could not copy xhr-sync-worker.js:", e.message);
   }
 
-  const ctx = await esbuild.context({
+  // Build extension
+  const extensionCtx = await esbuild.context({
     entryPoints: ["src/extension.ts"],
     bundle: true,
     format: "cjs",
@@ -58,11 +59,35 @@ async function main() {
       esbuildProblemMatcherPlugin,
     ],
   });
+
+  // Build renderer
+  const rendererCtx = await esbuild.context({
+    entryPoints: ["renderer/renderer.tsx"],
+    bundle: true,
+    format: "esm",
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: "browser",
+    outfile: "dist/renderer.js",
+    logLevel: "info",
+    plugins: [esbuildProblemMatcherPlugin],
+    jsx: "automatic",
+    jsxImportSource: "preact",
+    loader: {
+      ".tsx": "tsx",
+      ".ts": "tsx",
+    },
+  });
+
   if (watch) {
-    await ctx.watch();
+    await extensionCtx.watch();
+    await rendererCtx.watch();
   } else {
-    await ctx.rebuild();
-    await ctx.dispose();
+    await extensionCtx.rebuild();
+    await rendererCtx.rebuild();
+    await extensionCtx.dispose();
+    await rendererCtx.dispose();
   }
 }
 

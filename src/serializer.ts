@@ -42,54 +42,10 @@ export function formatCellOutput(
 ): vscode.NotebookCellOutput {
   // Handle different output types from Pluto
   console.log(output.mime);
-  //   By default, VS Code can render the following mimetypes:
 
-  // application/javascript
-  // text/html
-  // image/svg+xml
-  // text/markdown
-  // image/png
-  // image/jpeg
-  // text/plain
-  switch (output.mime) {
-    case "image/png":
-    case "image/jpg":
-    case "image/jpeg":
-    case "image/gif":
-    case "image/bmp":
-    case "image/svg+xml": {
-      const decoded = decodeUint8Array(output.body);
-      return new vscode.NotebookCellOutput([
-        vscode.NotebookCellOutputItem.text(decoded, "text/html"),
-      ]);
-    }
-    case "text/plain": {
-      return new vscode.NotebookCellOutput([
-        vscode.NotebookCellOutputItem.text(output.body, output.mime),
-      ]);
-    }
-    case "text/html": {
-      return new vscode.NotebookCellOutput([
-        vscode.NotebookCellOutputItem.text(output.body, output.mime),
-      ]);
-    }
-    // TODO these needs preact serverside rendering
-    case "application/vnd.pluto.tree+object":
-    case "application/vnd.pluto.table+object":
-    case "application/vnd.pluto.parseerror+object":
-    case "application/vnd.pluto.stacktrace+object":
-    case "application/vnd.pluto.divelement+object":
-    default: {
-      if (output.body) {
-        // HTML output
-        return new vscode.NotebookCellOutput([
-          vscode.NotebookCellOutputItem.text(output.body, output.mime),
-        ]);
-      }
-    }
-  }
+  // Wrap output in custom renderer mimetype
   return new vscode.NotebookCellOutput([
-    vscode.NotebookCellOutputItem.text(JSON.stringify(output, null, 2)),
+    vscode.NotebookCellOutputItem.json(output, "x-application/pluto-output"),
   ]);
 }
 
