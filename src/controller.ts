@@ -24,7 +24,6 @@ export class PlutoNotebookController {
   readonly supportedLanguages = ["julia"];
   private readonly controller: vscode.NotebookController;
   // Map to store Pluto notebook ID to VS Code URI (only used for the worker lookup)
-  private plutoNotebookMap: Map<string, vscode.Uri> = new Map();
   // Map to track active VS Code execution objects for streaming updates
   private activeExecutions: Map<CellId, vscode.NotebookCellExecution> =
     new Map();
@@ -42,7 +41,7 @@ export class PlutoNotebookController {
   };
 
   private interruptHandler = async (notebook: vscode.NotebookDocument) => {
-    const worker = await this.plutoManager.getWorker(notebook.uri);
+    const worker = await this.plutoManager.getWorker(notebook.uri.fsPath);
     if (worker) {
       try {
         // Find all currently running executions and mark them as failed
@@ -298,10 +297,8 @@ export class PlutoNotebookController {
       // Only initialize if server is running
       if (this.plutoManager.isRunning()) {
         try {
-          const worker = await this.plutoManager.getWorker(notebook.uri);
+          const worker = await this.plutoManager.getWorker(notebook.uri.fsPath);
           if (worker) {
-            this.plutoNotebookMap.set(worker.notebook_id, notebook.uri);
-
             this.outputChannel.appendLine(
               `Worker initialized for: ${notebook.uri.fsPath}`
             );
@@ -356,7 +353,7 @@ export class PlutoNotebookController {
         );
       }
 
-      const worker = await this.plutoManager.getWorker(notebook.uri);
+      const worker = await this.plutoManager.getWorker(notebook.uri.fsPath);
 
       if (!worker) {
         throw new Error(`Failed to initialize Pluto worker.`);

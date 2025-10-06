@@ -2,38 +2,7 @@ import * as vscode from "vscode";
 import { PlutoNotebookSerializer } from "./serializer.ts";
 import { PlutoNotebookController } from "./controller.ts";
 import { PlutoManager } from "./plutoManager.ts";
-import { UpdateEvent } from "@plutojl/rainbow";
-
-/**
- * Start Pluto server with progress notification
- */
-async function startServerWithProgress(
-  plutoManager: PlutoManager,
-  message: string = "Pluto server is ready"
-): Promise<void> {
-  await vscode.window.withProgress(
-    {
-      location: vscode.ProgressLocation.Notification,
-      title: "Starting Pluto server...",
-      cancellable: false,
-    },
-    async (progress) => {
-      try {
-        progress.report({ message: "Launching Julia process..." });
-        await plutoManager.start();
-        progress.report({ message: "Server started successfully!" });
-        vscode.window.showInformationMessage(message);
-      } catch (error: unknown) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        vscode.window.showErrorMessage(
-          `Failed to start Pluto server: ${errorMessage}`
-        );
-        throw error;
-      }
-    }
-  );
-}
+import { registerAllCommands, initializePlutoServer } from "./commands.ts";
 
 export async function activate(context: vscode.ExtensionContext) {
   // Create output channels
@@ -49,19 +18,14 @@ export async function activate(context: vscode.ExtensionContext) {
   const port = config.get<number>("port", 1234);
 
   // Initialize Pluto Manager
-  const plutoManager = new PlutoManager(port, serverOutputChannel);
+  const plutoManager = new PlutoManager(port, {
+    appendLine: serverOutputChannel.appendLine.bind(serverOutputChannel),
+    showWarningMessage: vscode.window.showWarningMessage,
+  });
   context.subscriptions.push(plutoManager);
 
   // Start Pluto server on activation
-  try {
-    await startServerWithProgress(plutoManager);
-  } catch (error) {
-    // Continue activation even if server fails to start
-    // Users can manually start the server later
-    serverOutputChannel.appendLine(
-      "Extension activated but server failed to start. Use 'Start Server' command to retry."
-    );
-  }
+  await initializePlutoServer(plutoManager, serverOutputChannel);
 
   // Register the notebook serializer
   context.subscriptions.push(
@@ -85,54 +49,8 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // Keep the hello world command for testing
-  const disposable = vscode.commands.registerCommand(
-    "pluto-notebook.helloWorld",
-    () => {
-      vscode.window.showInformationMessage("Hello World from Pluto Notebook!");
-    }
-  );
-  context.subscriptions.push(disposable);
-
-  // Register server control commands
-  context.subscriptions.push(
-    vscode.commands.registerCommand("pluto-notebook.startServer", async () => {
-      await startServerWithProgress(plutoManager, "Pluto server started");
-    })
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand("pluto-notebook.stopServer", async () => {
-      try {
-        await plutoManager.stop();
-        vscode.window.showInformationMessage("Pluto server stopped");
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        vscode.window.showErrorMessage(
-          `Failed to stop Pluto server: ${errorMessage}`
-        );
-      }
-    })
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "pluto-notebook.restartServer",
-      async () => {
-        try {
-          await plutoManager.restart();
-          vscode.window.showInformationMessage("Pluto server restarted");
-        } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
-          vscode.window.showErrorMessage(
-            `Failed to restart Pluto server: ${errorMessage}`
-          );
-        }
-      }
-    )
-  );
+  // Register all commands
+  registerAllCommands(context, plutoManager);
 }
 
 export function deactivate() {}
