@@ -3,8 +3,8 @@ import type {
   ActivationFunction,
   RendererContext,
 } from "vscode-notebook-renderer";
-import { render } from "preact";
 import { PlutoOutput } from "./components/PlutoOutput";
+import { html, render } from "@plutojl/rainbow/ui";
 
 interface PlutoOutputData {
   mime: string;
@@ -52,10 +52,9 @@ export const activate: ActivationFunction = (
   return {
     renderOutputItem(outputItem, element) {
       const output: PlutoOutputData = outputItem.json();
-
       // Render directly into the provided element
       // This ensures VS Code can properly clear/replace outputs
-      render(<PlutoOutput output={output} />, element);
+      render(html`<${PlutoOutput} output="${output}" />`, element);
     },
   };
 };
