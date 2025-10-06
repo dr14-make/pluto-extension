@@ -124,8 +124,7 @@ export class PlutoNotebookController {
     const segment2 = path[2];
 
     // 1. Update Cell Execution Status (queued, running)
-    const isStarting =
-      patch.value === true && (segment2 === "queued" || segment2 === "running");
+    const isStarting = patch.value === true && segment2 === "running";
 
     if (isStarting) {
       // Start execution
