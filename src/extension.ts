@@ -49,6 +49,13 @@ export async function activate(context: vscode.ExtensionContext) {
     })
   );
 
+  // Handle notebook cell changes (add/delete cells)
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeNotebookDocument(async (event) => {
+      await controller.handleVsCodeNotebookChange(event);
+    })
+  );
+
   // Register all commands
   registerAllCommands(context, plutoManager);
 }
