@@ -4,7 +4,7 @@ import type {
   RendererContext,
 } from "vscode-notebook-renderer";
 import { PlutoOutput } from "./components/PlutoOutput";
-import { html, render } from "@plutojl/rainbow/ui";
+import { html, PlutoActionsContext, render } from "@plutojl/rainbow/ui";
 
 interface PlutoOutputData {
   mime: string;
@@ -54,7 +54,24 @@ export const activate: ActivationFunction = (
       const output: PlutoOutputData = outputItem.json();
       // Render directly into the provided element
       // This ensures VS Code can properly clear/replace outputs
-      render(html`<${PlutoOutput} output="${output}" />`, element);
+      const actions = {
+        get_notebook: () => ({}),
+        request_js_link_response: () => {},
+        update_notebook: () => {},
+        set_bond: (name: string, value: any) => {
+          postMessageToController({
+            type: "bond",
+            name,
+            value,
+          });
+        },
+      };
+      render(
+        html`<${PlutoActionsContext.Provider} value=${actions}>
+          <${PlutoOutput} output="${output}" />
+        </${PlutoActionsContext.Provider}>`,
+        element
+      );
     },
   };
 };
