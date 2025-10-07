@@ -1,7 +1,10 @@
 import * as vscode from "vscode";
 import { PlutoNotebookSerializer } from "./serializer.ts";
 import { PlutoNotebookController } from "./controller.ts";
-import { registerAllCommands, initializePlutoServer } from "./commands.ts";
+import {
+  registerAllCommands,
+  initializePlutoServer,
+} from "./commands/index.ts";
 import { getSharedPlutoManager } from "./shared/plutoManagerInstance.ts";
 import {
   initializeMCPServer,
@@ -36,7 +39,9 @@ export async function activate(context: vscode.ExtensionContext) {
   initializeMCPServer(plutoManager, mcpPort, serverOutputChannel);
 
   // Auto-start MCP server if configured
-  await startMCPServer(autoStartMcp, serverOutputChannel);
+  if (autoStartMcp) {
+    await startMCPServer(serverOutputChannel);
+  }
 
   // Ensure MCP server is stopped and cleaned up when extension deactivates
   context.subscriptions.push({

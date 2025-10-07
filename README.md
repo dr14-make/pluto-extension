@@ -1,71 +1,111 @@
-# pluto-notebook README
+# Pluto Notebook for VS Code
 
-This is the README for your extension "pluto-notebook". After writing up a brief description, we recommend including the following sections.
+A VS Code extension for working with Julia Pluto notebooks, featuring an integrated MCP (Model Context Protocol) server for AI assistant interaction.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+- **Notebook Interface**: Edit and run Pluto notebooks directly in VS Code
+- **Integrated Pluto Server**: Automatically manages Pluto server lifecycle
+- **MCP Server**: HTTP-based MCP server for AI assistants like Claude Desktop and GitHub Copilot
+- **Shared State**: Extension and MCP clients share the same Pluto server connection
+- **Real-time Execution**: Execute Julia code and see results immediately
+- **Cell Management**: Create, edit, and execute notebook cells
+- **Ephemeral Execution**: Run code without modifying notebook structure
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- **Julia**: Julia must be installed and available in your PATH
+- **Pluto.jl**: The Pluto package should be installed in Julia
+
+  ```julia
+  using Pkg
+  Pkg.add("Pluto")
+  ```
+
+## Quick Start
+
+1. Open any `.dyad.jl` file in VS Code
+2. The extension automatically starts the Pluto server and MCP server
+3. Start working with your notebooks!
 
 ## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
 This extension contributes the following settings:
 
-- `myExtension.enable`: Enable/disable this extension.
-- `myExtension.thing`: Set to `blah` to do something.
+- `pluto-notebook.port`: Port number for the Pluto server (default: 1234)
+- `pluto-notebook.mcpPort`: Port number for the MCP HTTP server (default: 3100)
+- `pluto-notebook.autoStartMcpServer`: Automatically start the MCP HTTP server when the extension activates (default: true)
+
+## Available Commands
+
+### Pluto Server Commands
+
+- `Pluto: Start Server` - Manually start Pluto server
+- `Pluto: Stop Server` - Stop Pluto server
+- `Pluto: Restart Server` - Restart Pluto server
+
+### MCP Server Commands
+
+- `Pluto: Start MCP Server` - Manually start MCP HTTP server
+- `Pluto: Stop MCP Server` - Stop MCP HTTP server
+- `Pluto: Restart MCP Server` - Restart MCP HTTP server
+
+### Configuration Commands
+
+- `Pluto: Create MCP Config (Claude or Copilot)` - Create config file with interactive picker
+- `Pluto: Get MCP HTTP Server URL` - Get URL and config options
+
+## Using with AI Assistants
+
+The extension includes an MCP server that allows AI assistants to interact with your Pluto notebooks.
+
+### Claude Desktop
+
+Run the command `Pluto: Create MCP Config (Claude or Copilot)`, select "Claude Desktop", and restart Claude Desktop.
+
+### GitHub Copilot
+
+Run the command `Pluto: Create MCP Config (Claude or Copilot)`, select "GitHub Copilot", and reload VS Code.
+
+For detailed setup instructions, see the [MCP documentation](docs/MCP.md).
+
+## Documentation
+
+- **[MCP Server Guide](docs/MCP.md)** - Complete guide for MCP server setup and usage
+- **[Development Guide](docs/CLAUDE.md)** - Instructions for developing and contributing to the extension
+- **[Changelog](docs/CHANGELOG.md)** - Version history and release notes
+
+## Architecture
+
+The extension uses the `@plutojl/rainbow` package to communicate with the Pluto server. Both the VS Code extension and the MCP server share the same PlutoManager instance, ensuring consistency and avoiding duplicate processes.
+
+```
+VS Code Extension ──┐
+                    ├──> Shared PlutoManager ──> Pluto Server (Julia)
+MCP HTTP Server  ───┘
+```
 
 ## Known Issues
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+- The extension is in active development
+- Some advanced Pluto features may not be fully supported yet
 
 ## Release Notes
 
-Users appreciate release notes as you update your extension.
+### 0.0.1
 
-### 1.0.0
+Initial release featuring:
 
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+- Basic Pluto notebook support in VS Code
+- Integrated Pluto server management
+- HTTP-based MCP server for AI assistant integration
+- Shared state between extension and MCP clients
+- Interactive configuration for Claude Desktop and GitHub Copilot
 
 ---
 
-## Following extension guidelines
+## Support
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-- [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-- Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-- Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-- Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-- [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-- [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+For issues, questions, or contributions, please visit the project repository.
 
 **Enjoy!**

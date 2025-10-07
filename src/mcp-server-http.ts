@@ -238,11 +238,7 @@ export class PlutoMCPHttpServer {
       {
         path: z.string().describe("Path to the notebook"),
         code: z.string().describe("Julia code for the new cell"),
-        index: z
-          .number()
-          .describe("Cell index position")
-          .optional()
-          .default(0),
+        index: z.number().describe("Cell index position").optional().default(0),
       },
       async ({ path, code, index }) => {
         if (!this.plutoManager.isConnected()) {
@@ -501,7 +497,9 @@ export class PlutoMCPHttpServer {
   private setupRoutes(): void {
     // SSE endpoint for establishing the stream
     this.app.get("/mcp", async (_req: Request, res: Response) => {
-      console.log("[MCP HTTP] Received GET request to /mcp (establishing SSE stream)");
+      console.log(
+        "[MCP HTTP] Received GET request to /mcp (establishing SSE stream)"
+      );
 
       try {
         const transport = new SSEServerTransport("/messages", res);
@@ -509,13 +507,17 @@ export class PlutoMCPHttpServer {
         this.transports.set(sessionId, transport);
 
         transport.onclose = () => {
-          console.log(`[MCP HTTP] SSE transport closed for session ${sessionId}`);
+          console.log(
+            `[MCP HTTP] SSE transport closed for session ${sessionId}`
+          );
           this.transports.delete(sessionId);
         };
 
         const server = this.createMcpServer();
         await server.connect(transport);
-        console.log(`[MCP HTTP] Established SSE stream with session ID: ${sessionId}`);
+        console.log(
+          `[MCP HTTP] Established SSE stream with session ID: ${sessionId}`
+        );
       } catch (error) {
         console.error("[MCP HTTP] Error establishing SSE stream:", error);
         if (!res.headersSent) {
@@ -539,7 +541,9 @@ export class PlutoMCPHttpServer {
       const transport = this.transports.get(sessionId);
 
       if (!transport) {
-        console.error(`[MCP HTTP] No active transport found for session ID: ${sessionId}`);
+        console.error(
+          `[MCP HTTP] No active transport found for session ID: ${sessionId}`
+        );
         res.status(404).send("Session not found");
         return;
       }
@@ -579,9 +583,15 @@ export class PlutoMCPHttpServer {
           console.error("[MCP HTTP] Failed to start server:", error);
           reject(error);
         } else {
-          console.log(`[MCP HTTP] Pluto Notebook MCP Server listening on http://localhost:${this.port}`);
-          console.log(`[MCP HTTP] SSE endpoint: http://localhost:${this.port}/mcp`);
-          console.log(`[MCP HTTP] Health check: http://localhost:${this.port}/health`);
+          console.log(
+            `[MCP HTTP] Pluto Notebook MCP Server listening on http://localhost:${this.port}`
+          );
+          console.log(
+            `[MCP HTTP] SSE endpoint: http://localhost:${this.port}/mcp`
+          );
+          console.log(
+            `[MCP HTTP] Health check: http://localhost:${this.port}/health`
+          );
           resolve();
         }
       });
@@ -598,7 +608,10 @@ export class PlutoMCPHttpServer {
         await transport.close();
         this.transports.delete(sessionId);
       } catch (error) {
-        console.error(`[MCP HTTP] Error closing transport for session ${sessionId}:`, error);
+        console.error(
+          `[MCP HTTP] Error closing transport for session ${sessionId}:`,
+          error
+        );
       }
     }
 
@@ -658,21 +671,11 @@ export function getMCPServer(): PlutoMCPHttpServer | undefined {
  * @param outputChannel - Output channel for logging
  * @returns Promise that resolves when server starts
  */
-export async function startMCPServer(
-  autoStart: boolean,
-  outputChannel: {
-    appendLine: (msg: string) => void;
-  }
-): Promise<void> {
+export async function startMCPServer(outputChannel: {
+  appendLine: (msg: string) => void;
+}): Promise<void> {
   if (!mcpServerInstance) {
     outputChannel.appendLine("MCP server not initialized");
-    return;
-  }
-
-  if (!autoStart) {
-    outputChannel.appendLine(
-      'MCP Server auto-start is disabled. Use "Pluto: Start MCP Server" command to start it manually.'
-    );
     return;
   }
 
@@ -688,7 +691,9 @@ export async function startMCPServer(
     );
   } catch (error) {
     outputChannel.appendLine(
-      `Failed to start MCP Server: ${error instanceof Error ? error.message : String(error)}`
+      `Failed to start MCP Server: ${
+        error instanceof Error ? error.message : String(error)
+      }`
     );
     throw error;
   }
