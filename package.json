@@ -43,7 +43,8 @@
         "entrypoint": "./dist/renderer.js",
         "mimeTypes": [
           "x-application/pluto-output"
-        ]
+        ],
+        "requiresMessaging": "optional"
       }
     ],
     "commands": [
@@ -101,8 +102,7 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
-    "@plutojl/rainbow": "^0.5.5",
-    "jsdom": "^27.0.0",
-    "preact": "^10.27.2"
+    "@plutojl/rainbow": "^0.6.2",
+    "jsdom": "^27.0.0"
   }
 }
