@@ -5,7 +5,20 @@ import {
   useRef,
   useEffect,
   get_input_value,
+  setup_mathjax,
 } from "@plutojl/rainbow/ui";
+
+const useMathjaxEffect = () =>
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.rel = "pluto-external-source";
+    link.id = "MathJax-script";
+    link.href =
+      "https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg-full.js";
+    link.type = "text/javascript";
+    document.head.appendChild(link);
+    setup_mathjax();
+  }, []);
 
 /** @jsxImportSource preact */
 
@@ -34,22 +47,10 @@ const decodeBody = (body: string | Uint8Array): string => {
 
 export function PlutoOutput({ output }: PlutoOutputProps) {
   const ref = useRef();
+  useMathjaxEffect();
   useEffect(() => {
     const bonds = ref.current.querySelectorAll("bond");
-    console.log({ bonds });
-    // // TODO: Set bond's value. To set it we must also get it here...
-    // // Also TODO, provide pluto_actions
-
-    // window.MathJax = {};
-
-    // (function () {
-    //   var script = document.createElement("script");
-    //   script.src = "https://cdn.jsdelivr.net/npm/mathjax@4/tex-svg.js";
-    //   script.defer = true;
-    //   document.head.appendChild(script);
-    // })();
-    // console.log("RENDER");
-    // window.__pluto_setup_mathjax();
+    if (bonds.length) console.log({ bonds });
   }, [output]);
 
   // TODO workaround for images for now
