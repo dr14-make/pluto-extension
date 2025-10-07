@@ -1,7 +1,7 @@
 import "@plutojl/rainbow/node-polyfill";
-import * as vscode from "vscode";
-import { CellResultData, Host, UpdateEvent, Worker } from "@plutojl/rainbow";
+import { CellResultData, Host, Worker } from "@plutojl/rainbow";
 import { ChildProcess, spawn } from "child_process";
+import { readFile } from "fs/promises";
 /**
  * Manages connection to Pluto server and notebook sessions
  */
@@ -13,7 +13,13 @@ export class PlutoManager {
 
   constructor(
     private port: number = 1234,
-    private outputChannel: vscode.OutputChannel
+    private outputChannel: {
+      appendLine: (msg: string) => void;
+      showWarningMessage<T extends string>(
+        message: string,
+        ...items: T[]
+      ): Thenable<T | undefined>;
+    }
   ) {
     this.serverUrl = `http://localhost:${port}`;
   }
@@ -22,7 +28,14 @@ export class PlutoManager {
    * Check if Pluto server is running
    */
   isRunning(): boolean {
-    return !!this.juliaProcess && !!this.host;
+    return !!this.juliaProcess && this.isConnected();
+  }
+
+  /**
+   * Check if connected to a host (with or without owning the process)
+   */
+  isConnected(): boolean {
+    return !!this.host;
   }
 
   /**
@@ -33,41 +46,59 @@ export class PlutoManager {
   }
 
   /**
+   * Connect to an existing Pluto server without starting a new one
+   */
+  async connect(): Promise<void> {
+    if (this.isConnected()) {
+      this.log("Already connected to a Pluto server");
+      return;
+    }
+
+    this.log(`Connecting to Pluto server at ${this.serverUrl}...`);
+
+    try {
+      this.host = new Host(this.serverUrl);
+      this.log("Connected to Pluto server successfully!");
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.log(`Failed to connect to Pluto server: ${errorMessage}`);
+      throw error;
+    }
+  }
+
+  /**
    * Start Pluto server
    */
   async start(): Promise<void> {
     if (this.juliaProcess) {
-      this.outputChannel.appendLine("Pluto server is already running");
+      this.log("Pluto server is already running");
       return;
     }
 
-    this.outputChannel.appendLine(
-      `Starting Pluto server on port ${this.port}...`
-    );
+    this.log(`Starting Pluto server on port ${this.port}...`);
 
     try {
       this.juliaProcess = await this.runServer(this.port);
-      this.outputChannel.appendLine("Pluto server started successfully!");
+      this.log("Pluto server started successfully!");
 
       // Pipe Julia stdout to output channel
       this.juliaProcess.stdout?.on("data", (data) => {
-        this.outputChannel.append(data.toString());
+        this.log(data.toString());
       });
 
       // Pipe Julia stderr to output channel
       this.juliaProcess.stderr?.on("data", (data) => {
-        this.outputChannel.append(data.toString());
+        this.log(data.toString());
       });
 
       // Handle process exit
       this.juliaProcess.on("exit", (code) => {
-        this.outputChannel.appendLine(
-          `Pluto server exited with code ${code ?? "unknown"}`
-        );
+        this.log(`Pluto server exited with code ${code ?? "unknown"}`);
 
         // Show warning if server exits unexpectedly
         if (code !== 0 && code !== null) {
-          vscode.window.showWarningMessage(
+          this.outputChannel.showWarningMessage(
             `Pluto server stopped unexpectedly with exit code ${code}`
           );
         }
@@ -81,9 +112,7 @@ export class PlutoManager {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      this.outputChannel.appendLine(
-        `Failed to start Pluto server: ${errorMessage}`
-      );
+      this.log(`Failed to start Pluto server: ${errorMessage}`);
       throw error;
     }
   }
@@ -93,11 +122,11 @@ export class PlutoManager {
    */
   async stop(): Promise<void> {
     if (!this.juliaProcess) {
-      this.outputChannel.appendLine("Pluto server is not running");
+      this.log("Pluto server is not running");
       return;
     }
 
-    this.outputChannel.appendLine("Stopping Pluto server...");
+    this.log("Stopping Pluto server...");
 
     // Close all workers
     for (const worker of this.workers.values()) {
@@ -110,14 +139,14 @@ export class PlutoManager {
     this.juliaProcess = undefined;
     this.host = undefined;
 
-    this.outputChannel.appendLine("Pluto server stopped");
+    this.log("Pluto server stopped");
   }
 
   /**
    * Restart Pluto server
    */
   async restart(): Promise<void> {
-    this.outputChannel.appendLine("Restarting Pluto server...");
+    this.log("Restarting Pluto server...");
     await this.stop();
     await this.start();
   }
@@ -130,14 +159,14 @@ export class PlutoManager {
       ]);
 
       julia.stdout?.on("data", (data) => {
-        this.outputChannel.append(`[Server Init] ${data}`);
+        this.log(`[Server Init] ${data}`);
         if (data.toString().includes("Go to")) {
           resolve(julia);
         }
       });
 
       julia.stderr?.on("data", (data) => {
-        this.outputChannel.append(`[Server Init] ${data}`);
+        this.log(`[Server Init] ${data}`);
         if (data.toString().includes("Go to")) {
           resolve(julia);
         }
@@ -152,13 +181,12 @@ export class PlutoManager {
 
   /**
    * Get or create a worker for a notebook
+   * const notebookPath = notebookUri.fsPath;
    */
-  async getWorker(notebookUri: vscode.Uri): Promise<Worker | undefined> {
-    if (!this.host) {
+  async getWorker(notebookPath: string): Promise<Worker | undefined> {
+    if (!this.isConnected()) {
       await this.start();
     }
-
-    const notebookPath = notebookUri.fsPath;
 
     // Check if we already have a worker for this notebook
     let worker = this.workers.get(notebookPath);
@@ -167,12 +195,12 @@ export class PlutoManager {
       // Read notebook content from file
       let notebookContent: string;
       try {
-        const fileContent = await vscode.workspace.fs.readFile(notebookUri);
+        const fileContent = await readFile(notebookPath);
         notebookContent = new TextDecoder().decode(fileContent);
         worker = await this.host.createWorker(notebookContent.trim());
         this.workers.set(notebookPath, worker);
       } catch (error) {
-        this.outputChannel.appendLine(`Error reading notebook file: ${error}`);
+        this.log(`Error reading notebook file: ${error}`);
         throw new Error(`Cannot create worker: failed to read notebook file`);
       }
     }
@@ -195,7 +223,7 @@ export class PlutoManager {
   ): Promise<CellResultData | null> {
     try {
       // Update existing cell code and run it
-      const result = await worker.updateSnippetCode(cellId, code, true);
+      await worker.updateSnippetCode(cellId, code, true);
 
       // Wait for execution to complete
       // await worker.wait(true);
@@ -206,7 +234,7 @@ export class PlutoManager {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      this.outputChannel.appendLine(`[Cell Execution Error] ${errorMessage}`);
+      this.log(`[Cell Execution Error] ${errorMessage}`);
       throw error;
     }
   }
@@ -235,14 +263,59 @@ export class PlutoManager {
 
   /**
    * Close connection to a notebook
+   * const notebookPath = notebookUri.fsPath;
    */
-  closeNotebook(notebookUri: vscode.Uri): void {
-    const notebookPath = notebookUri.fsPath;
+  closeNotebook(notebookPath: string): void {
     const worker = this.workers.get(notebookPath);
 
     if (worker) {
       worker.close();
       this.workers.delete(notebookPath);
+    }
+  }
+
+  /**
+   * Get list of open notebooks
+   */
+  getOpenNotebooks(): Array<{ path: string; notebookId: string }> {
+    const notebooks: Array<{ path: string; notebookId: string }> = [];
+    for (const [path, worker] of this.workers.entries()) {
+      notebooks.push({
+        path,
+        notebookId: worker.notebook_id,
+      });
+    }
+    return notebooks;
+  }
+
+  /**
+   * Execute Julia code in a notebook without creating a persistent cell
+   * This uses waitSnippet at index 0 and then immediately deletes the cell
+   */
+  async executeCodeEphemeral(
+    worker: Worker,
+    code: string
+  ): Promise<CellResultData> {
+    try {
+      // Execute code at index 0 (creates a temporary cell)
+      const result = await worker.waitSnippet(0, code);
+
+      // Delete the cell immediately after execution
+      try {
+        await worker.deleteSnippets([result.cell_id]);
+      } catch (deleteError) {
+        // Log but don't fail if deletion fails
+        this.log(
+          `Warning: Failed to delete ephemeral cell ${result.cell_id}: ${deleteError}`
+        );
+      }
+
+      return result;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.log(`[Ephemeral Execution Error] ${errorMessage}`);
+      throw error;
     }
   }
 

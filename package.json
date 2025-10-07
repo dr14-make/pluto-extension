@@ -3,6 +3,7 @@
   "displayName": "Pluto Notebook",
   "description": "VSCode extension for Julia Pluto notebooks",
   "version": "0.0.1",
+  "icon": "images/icon.png",
   "type": "module",
   "engines": {
     "vscode": "^1.104.0"
@@ -22,6 +23,16 @@
           "type": "number",
           "default": 1234,
           "description": "Port number for the Pluto server"
+        },
+        "pluto-notebook.mcpPort": {
+          "type": "number",
+          "default": 3100,
+          "description": "Port number for the MCP HTTP server"
+        },
+        "pluto-notebook.autoStartMcpServer": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start the MCP HTTP server when the extension activates"
         }
       }
     },
@@ -31,7 +42,7 @@
         "displayName": "Pluto Notebook",
         "selector": [
           {
-            "filenamePattern": "*.jl"
+            "filenamePattern": "*.dyad.jl"
           }
         ]
       }
@@ -63,6 +74,30 @@
       {
         "command": "pluto-notebook.restartServer",
         "title": "Pluto: Restart Server"
+      },
+      {
+        "command": "pluto-notebook.startMCPServer",
+        "title": "Pluto: Start MCP Server"
+      },
+      {
+        "command": "pluto-notebook.stopMCPServer",
+        "title": "Pluto: Stop MCP Server"
+      },
+      {
+        "command": "pluto-notebook.restartMCPServer",
+        "title": "Pluto: Restart MCP Server"
+      },
+      {
+        "command": "pluto-notebook.createProjectMCPConfig",
+        "title": "Pluto: Create MCP Config (Claude or Copilot)"
+      },
+      {
+        "command": "pluto-notebook.getMCPHttpUrl",
+        "title": "Pluto: Get MCP HTTP Server URL"
+      },
+      {
+        "command": "pluto-notebook.openInBrowser",
+        "title": "Pluto: Open Notebook in Browser"
       }
     ]
   },
@@ -84,7 +119,9 @@
     "test:coverage": "jest --coverage"
   },
   "devDependencies": {
+    "@types/express": "^5.0.3",
     "@types/jest": "^30.0.0",
+    "@types/mathjax": "^0.0.40",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "@types/vscode": "^1.104.0",
@@ -102,7 +139,10 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.19.1",
     "@plutojl/rainbow": "^0.6.2",
-    "jsdom": "^27.0.0"
+    "jsdom": "^27.0.0",
+    "mathjax": "^3.0.0",
+    "zod": "^3.25.76"
   }
 }
