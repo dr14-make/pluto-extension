@@ -109,7 +109,9 @@ export class PlutoNotebookController {
     // Placeholder: Handle different message types from renderer
     switch (message.type) {
       case "bond":
-        const worker = await this.plutoManager.getWorker(editor.notebook.uri);
+        const worker = await this.plutoManager.getWorker(
+          editor.notebook.uri.fsPath
+        );
         await worker?.setBond(message.name, message.value);
         this.outputChannel.appendLine(
           `[RENDERER MESSAGE] Bond set${message.name}=${message.value}!`
