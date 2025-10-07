@@ -6,6 +6,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { PlutoManager } from "./plutoManager.ts";
 import { z } from "zod";
+// @ts-ignore - esbuild will load this as text
+import PlutoGuide from "./PLUTO_GUIDE.md";
 
 // Singleton instance
 let mcpServerInstance: PlutoMCPHttpServer | undefined;
@@ -50,6 +52,23 @@ export class PlutoMCPHttpServer {
   }
 
   private registerTools(server: McpServer): void {
+    // Learn Pluto Basics
+    server.tool(
+      "learn_pluto_basics",
+      "Get comprehensive guide on Pluto.jl notebook structure, reactivity, PlutoUI components, and best practices",
+      {},
+      async () => {
+        return {
+          content: [
+            {
+              type: "text",
+              text: PlutoGuide,
+            },
+          ],
+        };
+      }
+    );
+
     // Start Pluto Server
     server.tool(
       "start_pluto_server",

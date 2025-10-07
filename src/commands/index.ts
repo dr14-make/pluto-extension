@@ -20,6 +20,7 @@ import {
   registerStartServerCommand,
   registerStopServerCommand,
   registerRestartServerCommand,
+  registerOpenInBrowserCommand,
 } from "./plutoServerCommands.ts";
 
 import {
@@ -50,6 +51,7 @@ export function registerAllCommands(
   registerStartServerCommand(context, plutoManager);
   registerStopServerCommand(context, plutoManager);
   registerRestartServerCommand(context, plutoManager);
+  registerOpenInBrowserCommand(context, plutoManager);
 
   // Register MCP Server commands
   registerStartMCPServerCommand(context);

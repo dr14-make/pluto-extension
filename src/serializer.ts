@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
 import {
-  createVsCodeCellFromPlutoCell,
   parsePlutoNotebook,
   serializePlutoNotebook,
 } from "./plutoSerializer.ts";

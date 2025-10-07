@@ -129,7 +129,7 @@ Create `.mcp.json` in your workspace root:
   "mcpServers": {
     "pluto-notebook": {
       "url": "http://localhost:3100/mcp",
-      "transport": "sse"
+      "type": "sse"
     }
   }
 }
@@ -169,7 +169,7 @@ Create `mcp.json` in your workspace root:
 |---------|----------------|----------------|
 | **File** | `.mcp.json` | `mcp.json` |
 | **Location** | Workspace root | Workspace root |
-| **Transport** | `sse` (explicit) | `http` (explicit) |
+| **Type** | `sse` | `http` |
 | **Restart** | Restart app | Reload window |
 | **Purpose** | MCP-specific | MCP-specific |
 
@@ -193,6 +193,19 @@ To change the port:
 ## Available Tools
 
 The MCP server exposes the following tools:
+
+1. **learn_pluto_basics**: Get comprehensive guide on Pluto.jl notebook structure and best practices
+2. **start_pluto_server**: Start the Pluto server
+3. **connect_to_pluto_server**: Connect to an existing Pluto server
+4. **stop_pluto_server**: Stop the Pluto server
+5. **open_notebook**: Open a Pluto notebook and create a worker session
+6. **list_notebooks**: Get a list of all open notebooks with their paths and IDs
+7. **execute_cell**: Execute an existing cell by ID
+8. **create_cell**: Create and execute a new cell
+9. **edit_cell**: Update the code of an existing cell
+10. **read_cell**: Read the code and output of a cell
+11. **execute_code**: Execute Julia code without creating a persistent cell (ephemeral)
+12. **get_notebook_status**: Get server and notebook status
 
 ### Server Management
 
@@ -247,6 +260,27 @@ Response:
   "message": "Pluto server is running"
 }
 ```
+
+### Learning Resources
+
+#### learn_pluto_basics
+Get comprehensive guide on Pluto.jl notebook structure, reactivity, PlutoUI components, and best practices.
+
+```json
+{
+  "name": "learn_pluto_basics",
+  "arguments": {}
+}
+```
+
+Response: Returns complete markdown documentation covering:
+- Notebook file format and cell structure
+- Reactive execution model and rules
+- Complete PlutoUI component reference (Slider, TextField, NumberField, CheckBox, Select, Button, etc.)
+- Combining markdown with interactive widgets
+- Best practices and common patterns
+
+**Usage**: AI assistants should call this tool first to understand how to properly create and modify Pluto notebooks.
 
 ### Notebook Management
 

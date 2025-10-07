@@ -3,6 +3,7 @@
   "displayName": "Pluto Notebook",
   "description": "VSCode extension for Julia Pluto notebooks",
   "version": "0.0.1",
+  "icon": "images/icon.png",
   "type": "module",
   "engines": {
     "vscode": "^1.104.0"
@@ -93,6 +94,10 @@
       {
         "command": "pluto-notebook.getMCPHttpUrl",
         "title": "Pluto: Get MCP HTTP Server URL"
+      },
+      {
+        "command": "pluto-notebook.openInBrowser",
+        "title": "Pluto: Open Notebook in Browser"
       }
     ]
   },

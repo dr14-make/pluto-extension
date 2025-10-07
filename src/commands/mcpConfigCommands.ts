@@ -8,7 +8,7 @@ function getClaudeConfig(mcpUrl: string): object {
     mcpServers: {
       "pluto-notebook": {
         url: mcpUrl,
-        transport: "sse",
+        type: "sse",
       },
     },
   };

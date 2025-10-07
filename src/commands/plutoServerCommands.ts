@@ -96,6 +96,61 @@ export function registerRestartServerCommand(
 }
 
 /**
+ * Command: Open notebook in browser
+ */
+export function registerOpenInBrowserCommand(
+  context: vscode.ExtensionContext,
+  plutoManager: PlutoManager
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "pluto-notebook.openInBrowser",
+      async (notebookPath?: string) => {
+        // If no path provided, try to get from active editor
+        if (!notebookPath) {
+          const activeEditor = vscode.window.activeTextEditor;
+          if (!activeEditor) {
+            vscode.window.showErrorMessage("No active notebook file");
+            return;
+          }
+          notebookPath = activeEditor.document.uri.fsPath;
+        }
+
+        // Check if server is running
+        if (!plutoManager.isConnected()) {
+          vscode.window.showErrorMessage(
+            "Pluto server is not running. Start the server first."
+          );
+          return;
+        }
+
+        // Get the worker for this notebook
+        const worker = await plutoManager.getWorker(notebookPath);
+        if (!worker) {
+          vscode.window.showErrorMessage(
+            `Notebook ${notebookPath} is not open. Open the notebook first.`
+          );
+          return;
+        }
+
+        // Get server port from config
+        const config = vscode.workspace.getConfiguration("pluto-notebook");
+        const serverPort = config.get<number>("port", 1234);
+
+        // Construct the URL
+        const url = `http://localhost:${serverPort}/edit?id=${worker.notebook_id}`;
+
+        // Open in browser
+        await vscode.env.openExternal(vscode.Uri.parse(url));
+        vscode.window.showInformationMessage(
+          `Opening notebook in browser: ${worker.notebook_id}`
+        );
+      }
+    )
+  );
+}
+
+/**
  * Initialize Pluto server on activation (exported for use in extension.ts)
  */
 export async function initializePlutoServer(
