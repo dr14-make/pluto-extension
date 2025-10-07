@@ -275,6 +275,51 @@ export class PlutoManager {
   }
 
   /**
+   * Get list of open notebooks
+   */
+  getOpenNotebooks(): Array<{ path: string; notebookId: string }> {
+    const notebooks: Array<{ path: string; notebookId: string }> = [];
+    for (const [path, worker] of this.workers.entries()) {
+      notebooks.push({
+        path,
+        notebookId: worker.notebook_id,
+      });
+    }
+    return notebooks;
+  }
+
+  /**
+   * Execute Julia code in a notebook without creating a persistent cell
+   * This uses waitSnippet at index 0 and then immediately deletes the cell
+   */
+  async executeCodeEphemeral(
+    worker: Worker,
+    code: string
+  ): Promise<CellResultData> {
+    try {
+      // Execute code at index 0 (creates a temporary cell)
+      const result = await worker.waitSnippet(0, code);
+
+      // Delete the cell immediately after execution
+      try {
+        await worker.deleteSnippets([result.cell_id]);
+      } catch (deleteError) {
+        // Log but don't fail if deletion fails
+        this.log(
+          `Warning: Failed to delete ephemeral cell ${result.cell_id}: ${deleteError}`
+        );
+      }
+
+      return result;
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.log(`[Ephemeral Execution Error] ${errorMessage}`);
+      throw error;
+    }
+  }
+
+  /**
    * Close all notebook connections
    */
   dispose(): void {

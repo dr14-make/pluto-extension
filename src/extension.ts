@@ -1,8 +1,14 @@
 import * as vscode from "vscode";
 import { PlutoNotebookSerializer } from "./serializer.ts";
 import { PlutoNotebookController } from "./controller.ts";
-import { PlutoManager } from "./plutoManager.ts";
 import { registerAllCommands, initializePlutoServer } from "./commands.ts";
+import { getSharedPlutoManager } from "./shared/plutoManagerInstance.ts";
+import {
+  initializeMCPServer,
+  startMCPServer,
+  stopMCPServer,
+  cleanupMCPServer,
+} from "./mcp-server-http.ts";
 
 export async function activate(context: vscode.ExtensionContext) {
   // Create output channels
@@ -15,14 +21,30 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Get port from configuration
   const config = vscode.workspace.getConfiguration("pluto-notebook");
-  const port = config.get<number>("port", 1234);
+  const plutoPort = config.get<number>("port", 1234);
+  const mcpPort = config.get<number>("mcpPort", 3100);
+  const autoStartMcp = config.get<boolean>("autoStartMcpServer", true);
 
-  // Initialize Pluto Manager
-  const plutoManager = new PlutoManager(port, {
+  // Initialize shared Pluto Manager
+  const plutoManager = getSharedPlutoManager(plutoPort, {
     appendLine: serverOutputChannel.appendLine.bind(serverOutputChannel),
     showWarningMessage: vscode.window.showWarningMessage,
   });
   context.subscriptions.push(plutoManager);
+
+  // Initialize HTTP MCP Server using the shared PlutoManager (singleton)
+  initializeMCPServer(plutoManager, mcpPort, serverOutputChannel);
+
+  // Auto-start MCP server if configured
+  await startMCPServer(autoStartMcp, serverOutputChannel);
+
+  // Ensure MCP server is stopped and cleaned up when extension deactivates
+  context.subscriptions.push({
+    dispose: async () => {
+      await stopMCPServer();
+      cleanupMCPServer();
+    },
+  });
 
   // Start Pluto server on activation
   await initializePlutoServer(plutoManager, serverOutputChannel);

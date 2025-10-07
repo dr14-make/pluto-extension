@@ -80,35 +80,14 @@ async function main() {
     },
   });
 
-  // Build MCP server
-  const mcpCtx = await esbuild.context({
-    entryPoints: ["src/mcp-server.ts"],
-    bundle: true,
-    format: "cjs",
-    minify: production,
-    sourcemap: !production,
-    sourcesContent: false,
-    platform: "node",
-    outfile: "dist/mcp-server.cjs",
-    external: ["vscode", "jsdom", "ws"],
-    logLevel: "silent",
-    plugins: [esbuildProblemMatcherPlugin],
-    banner: {
-      js: "#!/usr/bin/env node",
-    },
-  });
-
   if (watch) {
     await extensionCtx.watch();
     await rendererCtx.watch();
-    await mcpCtx.watch();
   } else {
     await extensionCtx.rebuild();
     await rendererCtx.rebuild();
-    await mcpCtx.rebuild();
     await extensionCtx.dispose();
     await rendererCtx.dispose();
-    await mcpCtx.dispose();
   }
 }
 

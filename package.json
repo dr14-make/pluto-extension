@@ -22,6 +22,16 @@
           "type": "number",
           "default": 1234,
           "description": "Port number for the Pluto server"
+        },
+        "pluto-notebook.mcpPort": {
+          "type": "number",
+          "default": 3100,
+          "description": "Port number for the MCP HTTP server"
+        },
+        "pluto-notebook.autoStartMcpServer": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start the MCP HTTP server when the extension activates"
         }
       }
     },
@@ -65,12 +75,24 @@
         "title": "Pluto: Restart Server"
       },
       {
-        "command": "pluto-notebook.getMCPServerPath",
-        "title": "Pluto: Get MCP Server Path"
+        "command": "pluto-notebook.startMCPServer",
+        "title": "Pluto: Start MCP Server"
+      },
+      {
+        "command": "pluto-notebook.stopMCPServer",
+        "title": "Pluto: Stop MCP Server"
+      },
+      {
+        "command": "pluto-notebook.restartMCPServer",
+        "title": "Pluto: Restart MCP Server"
       },
       {
         "command": "pluto-notebook.createProjectMCPConfig",
-        "title": "Pluto: Create MCP Config for Project"
+        "title": "Pluto: Create MCP Config (Claude or Copilot)"
+      },
+      {
+        "command": "pluto-notebook.getMCPHttpUrl",
+        "title": "Pluto: Get MCP HTTP Server URL"
       }
     ]
   },
@@ -81,7 +103,6 @@
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
     "package": "npm run check-types && npm run lint && node esbuild.js --production",
-    "mcp": "node dist/mcp-server.cjs",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
@@ -93,6 +114,7 @@
     "test:coverage": "jest --coverage"
   },
   "devDependencies": {
+    "@types/express": "^5.0.3",
     "@types/jest": "^30.0.0",
     "@types/mathjax": "^0.0.40",
     "@types/mocha": "^10.0.10",
@@ -115,6 +137,7 @@
     "@modelcontextprotocol/sdk": "^1.19.1",
     "@plutojl/rainbow": "^0.6.2",
     "jsdom": "^27.0.0",
-    "mathjax": "^3.0.0"
+    "mathjax": "^3.0.0",
+    "zod": "^3.25.76"
   }
 }

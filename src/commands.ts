@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { PlutoManager } from "./plutoManager.ts";
+import { getMCPServer } from "./mcp-server-http.ts";
 
 /**
  * Start Pluto server with progress notification
@@ -96,23 +97,39 @@ export function registerRestartServerCommand(
 }
 
 /**
- * Generate MCP server configuration object
+ * Generate MCP server configuration for Claude Desktop
  */
-function getMCPJson(mcpServerPath: string): object {
+function getClaudeConfig(mcpUrl: string): object {
   return {
     mcpServers: {
       "pluto-notebook": {
-        command: "node",
-        args: [mcpServerPath],
+        url: mcpUrl,
+        transport: "sse",
       },
     },
   };
 }
 
 /**
- * Create or update .mcp.json in the current workspace
+ * Generate MCP server configuration for GitHub Copilot
  */
-async function createProjectMCPConfig(extensionPath: string): Promise<void> {
+function getCopilotConfig(mcpUrl: string): object {
+  return {
+    "github.copilot.chat.mcp.servers": {
+      "pluto-notebook": {
+        url: mcpUrl,
+      },
+    },
+  };
+}
+
+/**
+ * Create or update MCP config in the current workspace
+ */
+async function createProjectMCPConfig(
+  mcpUrl: string,
+  configType: "claude" | "copilot"
+): Promise<void> {
   const workspaceFolders = vscode.workspace.workspaceFolders;
 
   if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -121,42 +138,66 @@ async function createProjectMCPConfig(extensionPath: string): Promise<void> {
   }
 
   const workspaceFolder = workspaceFolders[0];
-  const mcpConfigPath = vscode.Uri.joinPath(workspaceFolder.uri, ".mcp.json");
-  const mcpServerPath = `${extensionPath}/dist/mcp-server.cjs`;
+  const configFileName =
+    configType === "claude" ? "claude_desktop_config.json" : ".vscode/settings.json";
+  const configPath = vscode.Uri.joinPath(workspaceFolder.uri, configFileName);
 
   try {
+    // For Copilot, ensure .vscode directory exists
+    if (configType === "copilot") {
+      const vscodeDir = vscode.Uri.joinPath(workspaceFolder.uri, ".vscode");
+      try {
+        await vscode.workspace.fs.createDirectory(vscodeDir);
+      } catch (error) {
+        // Directory might already exist
+      }
+    }
+
     // Try to read existing config
-    let existingConfig: any = { mcpServers: {} };
+    let existingConfig: any = {};
 
     try {
-      const existingContent = await vscode.workspace.fs.readFile(mcpConfigPath);
+      const existingContent = await vscode.workspace.fs.readFile(configPath);
       existingConfig = JSON.parse(new TextDecoder().decode(existingContent));
     } catch (error) {
       // File doesn't exist, use default empty config
     }
 
-    // Update or add pluto-notebook server
-    if (!existingConfig.mcpServers) {
-      existingConfig.mcpServers = {};
-    }
+    // Merge configurations
+    const newConfig =
+      configType === "claude"
+        ? getClaudeConfig(mcpUrl)
+        : getCopilotConfig(mcpUrl);
 
-    const mcpConfig = getMCPJson(mcpServerPath) as any;
-    existingConfig.mcpServers["pluto-notebook"] =
-      mcpConfig.mcpServers["pluto-notebook"];
+    if (configType === "claude") {
+      if (!existingConfig.mcpServers) {
+        existingConfig.mcpServers = {};
+      }
+      existingConfig.mcpServers["pluto-notebook"] = (newConfig as any).mcpServers[
+        "pluto-notebook"
+      ];
+    } else {
+      if (!existingConfig["github.copilot.chat.mcp.servers"]) {
+        existingConfig["github.copilot.chat.mcp.servers"] = {};
+      }
+      existingConfig["github.copilot.chat.mcp.servers"]["pluto-notebook"] = (
+        newConfig as any
+      )["github.copilot.chat.mcp.servers"]["pluto-notebook"];
+    }
 
     // Write the config file
     const configContent = JSON.stringify(existingConfig, null, 2);
     await vscode.workspace.fs.writeFile(
-      mcpConfigPath,
+      configPath,
       new TextEncoder().encode(configContent)
     );
 
     // Open the file
-    const doc = await vscode.workspace.openTextDocument(mcpConfigPath);
+    const doc = await vscode.workspace.openTextDocument(configPath);
     await vscode.window.showTextDocument(doc);
 
     vscode.window.showInformationMessage(
-      `MCP config created/updated at ${mcpConfigPath.fsPath}`
+      `${configType === "claude" ? "Claude Desktop" : "Copilot"} config created/updated at ${configPath.fsPath}`
     );
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -164,46 +205,6 @@ async function createProjectMCPConfig(extensionPath: string): Promise<void> {
       `Failed to create MCP config: ${errorMessage}`
     );
   }
-}
-
-/**
- * Command: Get MCP server path with options
- */
-export function registerGetMCPServerPathCommand(
-  context: vscode.ExtensionContext
-): void {
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "pluto-notebook.getMCPServerPath",
-      async () => {
-        const extensionPath = context.extensionPath;
-        const mcpServerPath = `${extensionPath}/dist/mcp-server.cjs`;
-
-        const action = await vscode.window.showInformationMessage(
-          `MCP Server Path: ${mcpServerPath}`,
-          "Copy Path",
-          "Show Config Example",
-          "Create Project Config"
-        );
-
-        if (action === "Copy Path") {
-          await vscode.env.clipboard.writeText(mcpServerPath);
-          vscode.window.showInformationMessage("Path copied to clipboard!");
-        } else if (action === "Show Config Example") {
-          const mcpConfig = getMCPJson(mcpServerPath);
-          const configExample = JSON.stringify(mcpConfig, null, 2);
-
-          const doc = await vscode.workspace.openTextDocument({
-            content: configExample,
-            language: "json",
-          });
-          await vscode.window.showTextDocument(doc);
-        } else if (action === "Create Project Config") {
-          await createProjectMCPConfig(context.extensionPath);
-        }
-      }
-    )
-  );
 }
 
 /**
@@ -216,7 +217,189 @@ export function registerCreateProjectMCPConfigCommand(
     vscode.commands.registerCommand(
       "pluto-notebook.createProjectMCPConfig",
       async () => {
-        await createProjectMCPConfig(context.extensionPath);
+        const config = vscode.workspace.getConfiguration("pluto-notebook");
+        const mcpPort = config.get<number>("mcpPort", 3100);
+        const mcpUrl = `http://localhost:${mcpPort}/mcp`;
+
+        const choice = await vscode.window.showQuickPick(
+          [
+            {
+              label: "Claude Desktop",
+              description: "Create config for Claude Desktop (claude_desktop_config.json)",
+              value: "claude" as const,
+            },
+            {
+              label: "GitHub Copilot",
+              description: "Create config for GitHub Copilot (.vscode/settings.json)",
+              value: "copilot" as const,
+            },
+          ],
+          {
+            placeHolder: "Select which tool to configure",
+          }
+        );
+
+        if (choice) {
+          await createProjectMCPConfig(mcpUrl, choice.value);
+        }
+      }
+    )
+  );
+}
+
+/**
+ * Command: Get MCP HTTP Server URL
+ */
+export function registerGetMCPHttpUrlCommand(
+  context: vscode.ExtensionContext
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "pluto-notebook.getMCPHttpUrl",
+      async () => {
+        const config = vscode.workspace.getConfiguration("pluto-notebook");
+        const mcpPort = config.get<number>("mcpPort", 3100);
+        const mcpUrl = `http://localhost:${mcpPort}/mcp`;
+
+        const action = await vscode.window.showInformationMessage(
+          `MCP HTTP Server URL: ${mcpUrl}`,
+          "Copy URL",
+          "Create Claude Config",
+          "Create Copilot Config",
+          "Open Health Check"
+        );
+
+        if (action === "Copy URL") {
+          await vscode.env.clipboard.writeText(mcpUrl);
+          vscode.window.showInformationMessage("URL copied to clipboard!");
+        } else if (action === "Create Claude Config") {
+          await createProjectMCPConfig(mcpUrl, "claude");
+        } else if (action === "Create Copilot Config") {
+          await createProjectMCPConfig(mcpUrl, "copilot");
+        } else if (action === "Open Health Check") {
+          const healthUrl = `http://localhost:${mcpPort}/health`;
+          await vscode.env.openExternal(vscode.Uri.parse(healthUrl));
+        }
+      }
+    )
+  );
+}
+
+/**
+ * Command: Start MCP Server
+ */
+export function registerStartMCPServerCommand(
+  context: vscode.ExtensionContext
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "pluto-notebook.startMCPServer",
+      async () => {
+        const mcpServer = getMCPServer();
+
+        if (!mcpServer) {
+          vscode.window.showErrorMessage("MCP server is not initialized");
+          return;
+        }
+
+        if (mcpServer.isRunning()) {
+          vscode.window.showInformationMessage("MCP server is already running");
+          return;
+        }
+
+        try {
+          const config = vscode.workspace.getConfiguration("pluto-notebook");
+          const mcpPort = config.get<number>("mcpPort", 3100);
+
+          await mcpServer.start();
+          vscode.window.showInformationMessage(
+            `MCP Server started on http://localhost:${mcpPort}`
+          );
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          vscode.window.showErrorMessage(
+            `Failed to start MCP server: ${errorMessage}`
+          );
+        }
+      }
+    )
+  );
+}
+
+/**
+ * Command: Stop MCP Server
+ */
+export function registerStopMCPServerCommand(
+  context: vscode.ExtensionContext
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "pluto-notebook.stopMCPServer",
+      async () => {
+        const mcpServer = getMCPServer();
+
+        if (!mcpServer) {
+          vscode.window.showErrorMessage("MCP server is not initialized");
+          return;
+        }
+
+        if (!mcpServer.isRunning()) {
+          vscode.window.showInformationMessage("MCP server is not running");
+          return;
+        }
+
+        try {
+          await mcpServer.stop();
+          vscode.window.showInformationMessage("MCP Server stopped");
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          vscode.window.showErrorMessage(
+            `Failed to stop MCP server: ${errorMessage}`
+          );
+        }
+      }
+    )
+  );
+}
+
+/**
+ * Command: Restart MCP Server
+ */
+export function registerRestartMCPServerCommand(
+  context: vscode.ExtensionContext
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "pluto-notebook.restartMCPServer",
+      async () => {
+        const mcpServer = getMCPServer();
+
+        if (!mcpServer) {
+          vscode.window.showErrorMessage("MCP server is not initialized");
+          return;
+        }
+
+        try {
+          if (mcpServer.isRunning()) {
+            await mcpServer.stop();
+          }
+
+          const config = vscode.workspace.getConfiguration("pluto-notebook");
+          const mcpPort = config.get<number>("mcpPort", 3100);
+
+          await mcpServer.start();
+          vscode.window.showInformationMessage(
+            `MCP Server restarted on http://localhost:${mcpPort}`
+          );
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          vscode.window.showErrorMessage(
+            `Failed to restart MCP server: ${errorMessage}`
+          );
+        }
       }
     )
   );
@@ -232,8 +415,11 @@ export function registerAllCommands(
   registerStartServerCommand(context, plutoManager);
   registerStopServerCommand(context, plutoManager);
   registerRestartServerCommand(context, plutoManager);
-  registerGetMCPServerPathCommand(context);
+  registerStartMCPServerCommand(context);
+  registerStopMCPServerCommand(context);
+  registerRestartMCPServerCommand(context);
   registerCreateProjectMCPConfigCommand(context);
+  registerGetMCPHttpUrlCommand(context);
 }
 
 /**
