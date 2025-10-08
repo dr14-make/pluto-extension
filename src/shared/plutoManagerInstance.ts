@@ -15,10 +15,11 @@ export function getSharedPlutoManager(
       message: string,
       ...items: T[]
     ): Thenable<T | undefined>;
-  }
+  },
+  serverUrl?: string
 ): PlutoManager {
   if (!sharedPlutoManager) {
-    sharedPlutoManager = new PlutoManager(port, outputChannel);
+    sharedPlutoManager = new PlutoManager(port, outputChannel, serverUrl);
   }
   return sharedPlutoManager;
 }

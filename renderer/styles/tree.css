@@ -340,9 +340,6 @@ jlerror > section .classical-frame > mark > strong {
   color: var(--vscode-foreground);
   font-weight: 700;
 }
-jlerror > section .classical-frame s-span {
-  /* Type colors handled by theme */
-}
 jlerror > section .classical-frame s-span .argument_name {
   color: var(
     --vscode-symbolIcon-variableForeground,
@@ -393,10 +390,6 @@ jlerror li::marker {
   /* font-size: 0.7rem; */
   font-weight: 900;
   color: var(--vscode-errorForeground, red);
-}
-
-jlerror li.from_this_notebook .classical-frame {
-  /* opacity: 0.4; */
 }
 
 jlerror li a.frame-line-preview {

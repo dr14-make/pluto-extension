@@ -25,14 +25,19 @@ export async function activate(context: vscode.ExtensionContext) {
   // Get port from configuration
   const config = vscode.workspace.getConfiguration("pluto-notebook");
   const plutoPort = config.get<number>("port", 1234);
+  const serverUrl = config.get<string>("serverUrl", "");
   const mcpPort = config.get<number>("mcpPort", 3100);
   const autoStartMcp = config.get<boolean>("autoStartMcpServer", true);
 
   // Initialize shared Pluto Manager
-  const plutoManager = getSharedPlutoManager(plutoPort, {
-    appendLine: serverOutputChannel.appendLine.bind(serverOutputChannel),
-    showWarningMessage: vscode.window.showWarningMessage,
-  });
+  const plutoManager = getSharedPlutoManager(
+    plutoPort,
+    {
+      appendLine: serverOutputChannel.appendLine.bind(serverOutputChannel),
+      showWarningMessage: vscode.window.showWarningMessage,
+    },
+    serverUrl || undefined
+  );
   context.subscriptions.push(plutoManager);
 
   // Initialize HTTP MCP Server using the shared PlutoManager (singleton)

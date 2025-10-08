@@ -133,12 +133,11 @@ export function registerOpenInBrowserCommand(
           return;
         }
 
-        // Get server port from config
-        const config = vscode.workspace.getConfiguration("pluto-notebook");
-        const serverPort = config.get<number>("port", 1234);
+        // Get server URL from PlutoManager
+        const serverUrl = plutoManager.getServerUrl();
 
         // Construct the URL
-        const url = `http://localhost:${serverPort}/edit?id=${worker.notebook_id}`;
+        const url = `${serverUrl}/edit?id=${worker.notebook_id}`;
 
         // Open in browser
         await vscode.env.openExternal(vscode.Uri.parse(url));

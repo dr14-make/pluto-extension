@@ -10,6 +10,7 @@ export class PlutoManager {
   private workers: Map<string, Worker> = new Map(); // notebook_id -> Worker
   private serverUrl: string;
   private juliaProcess?: ChildProcess;
+  private usingCustomServerUrl: boolean = false;
 
   constructor(
     private port: number = 1234,
@@ -19,16 +20,24 @@ export class PlutoManager {
         message: string,
         ...items: T[]
       ): Thenable<T | undefined>;
-    }
+    },
+    serverUrl?: string
   ) {
-    this.serverUrl = `http://localhost:${port}`;
+    if (serverUrl) {
+      this.serverUrl = serverUrl;
+      this.usingCustomServerUrl = true;
+    } else {
+      this.serverUrl = `http://localhost:${port}`;
+    }
   }
 
   /**
    * Check if Pluto server is running
    */
   isRunning(): boolean {
-    return !!this.juliaProcess && this.isConnected();
+    return (
+      (!!this.juliaProcess || this.usingCustomServerUrl) && this.isConnected()
+    );
   }
 
   /**
@@ -68,9 +77,15 @@ export class PlutoManager {
   }
 
   /**
-   * Start Pluto server
+   * Start Pluto server (or connect to custom server URL)
    */
   async start(): Promise<void> {
+    // If using custom server URL, just connect without starting
+    if (this.usingCustomServerUrl) {
+      await this.connect();
+      return;
+    }
+
     if (this.juliaProcess) {
       this.log("Pluto server is already running");
       return;
@@ -259,6 +274,13 @@ export class PlutoManager {
    */
   async restartNotebook(worker: Worker): Promise<void> {
     await worker.restart();
+  }
+
+  /**
+   * Get the server URL
+   */
+  getServerUrl(): string {
+    return this.serverUrl;
   }
 
   /**

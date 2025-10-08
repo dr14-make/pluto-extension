@@ -24,6 +24,11 @@
           "default": 1234,
           "description": "Port number for the Pluto server"
         },
+        "pluto-notebook.serverUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Custom Pluto server URL (e.g., http://localhost:1234). When set, the extension will connect to this server instead of starting its own."
+        },
         "pluto-notebook.mcpPort": {
           "type": "number",
           "default": 3100,
