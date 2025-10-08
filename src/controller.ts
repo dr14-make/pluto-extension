@@ -114,8 +114,14 @@ export class PlutoNotebookController {
         );
         await worker?.setBond(message.name, message.value);
         this.outputChannel.appendLine(
-          `[RENDERER MESSAGE] Bond set${message.name}=${message.value}!`
+          `[RENDERER MESSAGE] Bond set${message.name}=${message.value} for ${editor.notebook.uri}!`
         );
+
+        this.sendMessageToRenderer(editor.notebook, {
+          type: "bond",
+          content: "ok",
+          cell_id: message.cell_id,
+        });
         break;
       default:
         this.outputChannel.appendLine(`[UNKNOWN MESSAGE TYPE] ${message.type}`);
@@ -187,6 +193,16 @@ export class PlutoNotebookController {
     const cellId = path[1] as CellId;
 
     const currentCellState = fullNotebookState.cell_results[cellId];
+
+    // Optimistically send data. May be ignored.
+    // If not ignored, this makes sure logs, stdout and progress
+    // is communicated
+    this.sendMessageToRenderer(notebook, {
+      type: "setState",
+      state: currentCellState,
+      cell_id: currentCellState.cell_id,
+    });
+
     const segment2 = path[2];
 
     // 1. Update Cell Execution Status (queued, running)
@@ -194,19 +210,20 @@ export class PlutoNotebookController {
 
     if (isStarting) {
       // Start execution
-      this.startExecution(cellId, notebook);
+      const execution = this.startExecution(cellId, notebook);
+      execution.replaceOutput([formatCellOutput(currentCellState)]);
     }
 
     // 2. Update Cell Output (only if an execution object exists)
     if (segment2 === "output") {
       // Handle final output/result update
       const execution = this.startExecution(cellId, notebook);
-      if (currentCellState?.output) {
-        execution.replaceOutput([formatCellOutput(currentCellState.output)]);
-        this.outputChannel.appendLine(
-          `[OUTPUT] Cell ${cellId} output updated.`
-        );
-      }
+      execution.replaceOutput([formatCellOutput(currentCellState)]);
+
+      this.outputChannel.appendLine(
+        `[OUTPUT] Cell ${cellId} for notebook ${notebook.uri} output updated.`
+      );
+
       execution.end(true, Date.now());
       this.activeExecutions.delete(cellId);
       this.outputChannel.appendLine(`[EXEC END] Cell ${cellId} finished.`);

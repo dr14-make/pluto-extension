@@ -6,7 +6,7 @@ import {
 import { CellResultData } from "@plutojl/rainbow";
 
 export function formatCellOutput(
-  output: CellResultData["output"]
+  output: CellResultData
 ): vscode.NotebookCellOutput {
   // Wrap output in custom renderer mimetype
   return new vscode.NotebookCellOutput([

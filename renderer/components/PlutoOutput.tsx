@@ -1,9 +1,18 @@
 import {
+  CellResultData,
+  PROGRESS_LOG_LEVEL,
+  STDOUT_LOG_LEVEL,
+  Worker,
+} from "@plutojl/rainbow";
+
+import {
   html,
   OutputBody,
   useEffect,
   setup_mathjax,
+  useState,
 } from "@plutojl/rainbow/ui";
+import { type RendererContext } from "vscode-notebook-renderer";
 
 const useMathjaxEffect = () =>
   useEffect(() => {
@@ -20,21 +29,93 @@ const useMathjaxEffect = () =>
 /** @jsxImportSource preact */
 
 interface PlutoOutputProps {
-  output: {
-    mime: string;
-    body: string | Uint8Array;
-  };
+  state: CellResultData;
+  context: RendererContext<void>;
 }
-
-export function PlutoOutput({ output }: PlutoOutputProps) {
+const cutMime = (s: { msg: string }) => {
+  return s.msg.slice(0, s.msg.lastIndexOf(","));
+};
+export function PlutoOutput({ state, context }: PlutoOutputProps) {
   useMathjaxEffect();
+  const [localState, setLocalState] = useState(state);
+  const [progress, setProgress] = useState<any>(null);
+  const [terminal, setTerminal] = useState<any>(null);
+  const [logs, setLogs] = useState<any>(null);
+  useEffect(() => {
+    // Listen for messages from the controller
+    const d = context.onDidReceiveMessage?.((message) => {
+      if (message.cell_id !== state.cell_id) {
+        return;
+      }
+      // Placeholder: Handle different message types from controller
+      switch (message.type) {
+        case "setState": {
+          const state = message.state as CellResultData;
+          setLocalState(state);
+          state; // fake worker
+
+          const logs = state.logs.filter((log) => {
+            return (
+              log.level.toString() !== PROGRESS_LOG_LEVEL &&
+              log.level.toString() !== STDOUT_LOG_LEVEL
+            );
+          });
+          const stdout = state.logs.filter((log) => {
+            return log.level.toString() === STDOUT_LOG_LEVEL;
+          });
+          const prog = state.logs.filter((log) => {
+            return log.level.toString() === PROGRESS_LOG_LEVEL;
+          });
+          setLogs(logs);
+          setTerminal(stdout);
+          // TODO: This is more sophisticated; it has mime type in
+          const result = prog[prog.length - 1]?.kwargs?.[0]?.[1]?.[0];
+          setProgress(100 * parseFloat(result === "done" ? "1" : result));
+        }
+        case "bond":
+          break;
+        default:
+          console.log("[RENDERER] Unknown message type:", message.type);
+      }
+    });
+    return () => d?.dispose();
+  }, [state.cell_id, context]);
+
   return html`
+  ${
+    state.running && progress
+      ? html`<div>
+          <label for=${`progress_${state.cell_id}`}> ${progress}% </label
+          ><progress
+            style="width: 240px;"
+            id=${`progress_${state.cell_id}`}
+            max="100"
+            value=${progress}
+          ></progress>
+        </div>`
+      : null
+  }
   <${OutputBody}
-    cell_id=""
-    last_run_timestamp="${0}"
+    cell_id=${state.cell_id}
     persist_js_state="${false}"
-    body="${output.body}"
-    mime="${output.mime}"
+    body="${localState.output?.body}"
+    mime="${localState.output?.mime}"
     sanitize_html="${false}"
-  ></${OutputBody}>`;
+  ></${OutputBody}>
+  ${
+    terminal?.length
+      ? html`<details open>
+          <summary>stdout</summary>
+          <pre>${terminal.map(cutMime).join("\n")}</pre>
+        </details>`
+      : null
+  }
+  ${
+    logs?.length
+      ? html`<details open>
+          <summary>Logs</summary>
+          <pre>${logs.map(cutMime).join("\n")}</pre>
+        </details>`
+      : null
+  }`;
 }

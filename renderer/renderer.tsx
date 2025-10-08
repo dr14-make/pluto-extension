@@ -5,11 +5,7 @@ import type {
 } from "vscode-notebook-renderer";
 import { PlutoOutput } from "./components/PlutoOutput";
 import { html, PlutoActionsContext, render } from "@plutojl/rainbow/ui";
-
-interface PlutoOutputData {
-  mime: string;
-  body: string | Uint8Array;
-}
+import { CellResultData } from "@plutojl/rainbow";
 
 /**
  * Communication bridge for sending messages to the controller
@@ -33,25 +29,9 @@ export const activate: ActivationFunction = (
 ) => {
   // Store messaging API for use in components
   messagingApi = context.postMessage;
-
-  // Listen for messages from the controller
-  context.onDidReceiveMessage?.((message) => {
-    console.log("[RENDERER] Received message from controller:", message);
-
-    // Placeholder: Handle different message types from controller
-    switch (message.type) {
-      case "bond":
-        console.log("[RENDERER] Bond received at:", message.timestamp);
-        break;
-
-      default:
-        console.log("[RENDERER] Unknown message type:", message.type);
-    }
-  });
-
   return {
     renderOutputItem(outputItem, element) {
-      const output: PlutoOutputData = outputItem.json();
+      const state: CellResultData = outputItem.json();
       // Render directly into the provided element
       // This ensures VS Code can properly clear/replace outputs
       const actions = {
@@ -63,12 +43,13 @@ export const activate: ActivationFunction = (
             type: "bond",
             name,
             value,
+            cell_id: state.cell_id,
           });
         },
       };
       render(
         html`<${PlutoActionsContext.Provider} value=${actions}>
-          <${PlutoOutput} output="${output}" />
+          <${PlutoOutput} state="${state}"  context=${context} />
         </${PlutoActionsContext.Provider}>`,
         element
       );
