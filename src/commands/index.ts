@@ -14,6 +14,7 @@ import { PlutoManager } from "../plutoManager.ts";
 export * from "./plutoServerCommands.ts";
 export * from "./mcpServerCommands.ts";
 export * from "./mcpConfigCommands.ts";
+export * from "./terminalCommands.ts";
 
 // Import for registerAllCommands
 import {
@@ -33,6 +34,8 @@ import {
   registerCreateProjectMCPConfigCommand,
   registerGetMCPHttpUrlCommand,
 } from "./mcpConfigCommands.ts";
+
+import { registerCreateTerminalCommand } from "./terminalCommands.ts";
 
 /**
  * Register all commands at once
@@ -61,4 +64,7 @@ export function registerAllCommands(
   // Register MCP Config commands
   registerCreateProjectMCPConfigCommand(context);
   registerGetMCPHttpUrlCommand(context);
+
+  // Register Terminal commands
+  registerCreateTerminalCommand(context, plutoManager);
 }

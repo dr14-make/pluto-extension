@@ -12,6 +12,7 @@ import {
   stopMCPServer,
   cleanupMCPServer,
 } from "./mcp-server-http.ts";
+import { PlutoTerminalProvider } from "./plutoTerminal.ts";
 
 export async function activate(context: vscode.ExtensionContext) {
   // Create output channels
@@ -90,6 +91,29 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register all commands
   registerAllCommands(context, plutoManager);
+
+  // Register terminal profile provider
+  const terminalOutputChannel =
+    vscode.window.createOutputChannel("Pluto Terminal");
+  context.subscriptions.push(terminalOutputChannel);
+
+  context.subscriptions.push(
+    vscode.window.registerTerminalProfileProvider("pluto-notebook.terminal", {
+      provideTerminalProfile(
+        token: vscode.CancellationToken
+      ): vscode.ProviderResult<vscode.TerminalProfile> {
+        const pty = new PlutoTerminalProvider(
+          plutoManager,
+          terminalOutputChannel
+        );
+        return new vscode.TerminalProfile({
+          name: "Pluto Terminal",
+          pty,
+          iconPath: new vscode.ThemeIcon("symbol-namespace"),
+        });
+      },
+    })
+  );
 }
 
 export function deactivate() {}

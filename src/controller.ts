@@ -3,6 +3,21 @@ import { PlutoManager } from "./plutoManager.ts";
 import { NotebookData, UpdateEvent } from "@plutojl/rainbow";
 import { formatCellOutput } from "./serializer.ts";
 
+/**
+ * Prepare cell code for Pluto worker
+ * Wraps markdown cells in #VSCODE-MARKDOWN marker and md""" syntax
+ */
+function prepareCellCodeForWorker(cell: vscode.NotebookCell): string {
+  const code = cell.document.getText();
+
+  // If it's a markdown cell, wrap it properly for Pluto
+  if (cell.kind === vscode.NotebookCellKind.Markup) {
+    return `#VSCODE-MARKDOWN\nmd"""\n${code}\n"""`;
+  }
+
+  return code;
+}
+
 // --- START: Merged Interfaces ---
 
 /** A unique identifier for a cell, typically a UUID string. */
@@ -496,7 +511,8 @@ export class PlutoNotebookController {
     }
     for (const addedCell of addedCells) {
       try {
-        const code = addedCell.document.getText();
+        // Prepare code - wrap markdown cells properly
+        const code = prepareCellCodeForWorker(addedCell);
         const cellIndex = notebook.getCells().indexOf(addedCell);
 
         this.outputChannel.appendLine(`Adding new cell at index ${cellIndex}`);
@@ -645,7 +661,8 @@ export class PlutoNotebookController {
       }
 
       // Execute the cell. This sends the message to the Pluto kernel.
-      const code = cell.document.getText();
+      // For markdown cells, wrap in proper format
+      const code = prepareCellCodeForWorker(cell);
 
       // The worker will handle the execution and stream updates back via onNotebookUpdate.
       await this.plutoManager.executeCell(worker, cellId, code);
