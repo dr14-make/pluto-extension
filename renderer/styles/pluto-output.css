@@ -1,42 +1,37 @@
 /* VSCode theme-aware styles for Pluto output renderer */
-:not(pluto-tree) {
-  details {
-    max-height: 14rem;
-    overflow: auto;
-  }
+details {
+  max-height: 14rem;
+  overflow: auto;
+}
 
-  pluto-output > assignee ~ * {
-    max-height: 18rem;
-    overflow: auto;
-  }
+details pre {
+  background-color: var(--vscode-textCodeBlock-background);
+  color: var(
+    --vscode-textPreformat-foreground,
+    var(--vscode-editor-foreground)
+  );
+  padding: 0.5rem;
+  border-radius: 3px;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
 
-  pre {
-    background-color: var(--vscode-textCodeBlock-background);
-    color: var(
-      --vscode-textPreformat-foreground,
-      var(--vscode-editor-foreground)
-    );
-    padding: 0.5rem;
-    border-radius: 3px;
-    overflow-x: auto;
-    margin: 0.5rem 0;
-  }
+details code {
+  font-family: var(--vscode-editor-font-family);
+  font-size: var(--vscode-editor-font-size);
+  color: unset;
+  background-color: unset;
+}
 
-  code {
-    font-family: var(--vscode-editor-font-family);
-    font-size: var(--vscode-editor-font-size);
-  }
+/* Additional useful VSCode theme variables for future styling */
+details summary {
+  cursor: pointer;
+  color: var(--vscode-foreground);
+  padding: 0.25rem 0;
+}
 
-  /* Additional useful VSCode theme variables for future styling */
-  details summary {
-    cursor: pointer;
-    color: var(--vscode-foreground);
-    padding: 0.25rem 0;
-  }
-
-  details[open] {
-    border-left: 2px solid
-      var(--vscode-textBlockQuote-border, var(--vscode-panel-border));
-    padding-left: 0.5rem;
-  }
+details[open] {
+  border-left: 2px solid
+    var(--vscode-textBlockQuote-border, var(--vscode-panel-border));
+  padding-left: 0.5rem;
 }

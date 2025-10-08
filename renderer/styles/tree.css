@@ -1,11 +1,12 @@
 /* Vendored from Pluto.jl/frontend/treeview.css */
+/* Adapted for VSCode theme variables */
 pluto-tree,
 pluto-tree-pair {
-  font-family: var(--julia-mono-font-stack);
+  font-family: var(--vscode-editor-font-family, monospace);
   font-size: 0.75rem;
 }
 pluto-tree {
-  color: var(--pluto-tree-color);
+  color: var(--vscode-editor-foreground, var(--vscode-foreground));
   white-space: pre;
   cursor: pointer;
 }
@@ -44,7 +45,7 @@ pluto-tree > pluto-tree-prefix::before {
   opacity: 0.5;
   cursor: pointer;
   background-image: url("https://cdn.jsdelivr.net/gh/ionic-team/ionicons@5.5.1/src/svg/caret-down-outline.svg");
-  filter: var(--image-filters);
+  /* Icons will adapt to theme through opacity */
 }
 
 pluto-tree.collapsed pluto-tree > pluto-tree-prefix::before {
@@ -57,7 +58,7 @@ pluto-tree.collapsed > pluto-tree-prefix::before {
 
 pluto-tree p-r > p-v {
   display: inline-flex;
-  color: var(--pluto-output-color);
+  color: var(--vscode-editor-foreground, var(--vscode-foreground));
 }
 
 pluto-tree.collapsed pluto-tree-items.Array > p-r > p-k,
@@ -183,7 +184,7 @@ pluto-tree-more::before {
   height: 1em;
   width: 1em;
   opacity: 0.5;
-  filter: var(--image-filters);
+  /* Icons adapt to theme through opacity */
   background-image: url("https://cdn.jsdelivr.net/gh/ionic-team/ionicons@5.5.1/src/svg/ellipsis-vertical.svg");
 }
 
@@ -232,29 +233,31 @@ pluto-tree img {
 pluto-tree p-r pre {
   white-space: pre;
   word-break: normal;
+  margin: 0.1em;
 }
 
 /*  */
 
 jlerror {
   font-size: 0.75rem;
-  font-family: var(--julia-mono-font-stack);
+  font-family: var(--vscode-editor-font-family, monospace);
 }
 jlerror {
   display: block;
   padding: 1em;
-  background-color: var(--code-section-bg-color);
-  border: 3px solid var(--pkg-terminal-border-color);
+  background-color: var(--vscode-textCodeBlock-background);
+  border: 3px solid
+    var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border));
   border-radius: 0.6em;
   margin: 1em 0;
   overflow-wrap: break-word;
 }
 
 jlerror > header {
-  color: var(--jlerror-header-color);
-  border-left: 3px solid var(--jlerror-header-color);
+  color: var(--vscode-errorForeground);
+  border-left: 3px solid var(--vscode-errorForeground);
   padding: 0.7rem;
-  background: var(--white);
+  background: var(--vscode-editor-background);
   border-radius: 3px;
 }
 jlerror > header > p {
@@ -267,7 +270,7 @@ jlerror > header > p:first-child {
 }
 jlerror .stacktrace-header,
 jlerror .error-header {
-  font-family: var(--system-ui-font-stack);
+  font-family: var(--vscode-font-family, system-ui);
 }
 jlerror .error-header {
   margin-block-end: 1em;
@@ -275,10 +278,11 @@ jlerror .error-header {
 jlerror secret-h1 {
   font-size: 1.9rem;
   font-weight: 700;
-  color: var(--pluto-output-h-color);
+  color: var(--vscode-foreground);
 }
 jlerror > section {
-  border-block-start: 3px dashed var(--pkg-terminal-border-color);
+  border-block-start: 3px dashed
+    var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border));
   margin-block-start: 1rem;
   padding-block-start: 1rem;
 }
@@ -289,15 +293,17 @@ jlerror .stacktrace-waiting-to-view {
   padding: 1rem 0 0 0;
 }
 jlerror .stacktrace-waiting-to-view button {
-  background: var(--white);
-  border: 3px solid var(--pkg-terminal-border-color);
+  background: var(--vscode-button-background);
   border: none;
   border-radius: 6px;
   padding: 0.5em 1em;
-  color: var(--pluto-output-color);
-  font-family: var(--system-ui-font-stack);
+  color: var(--vscode-button-foreground);
+  font-family: var(--vscode-font-family, system-ui);
   cursor: pointer;
   font-weight: 700;
+}
+jlerror .stacktrace-waiting-to-view button:hover {
+  background: var(--vscode-button-hoverBackground);
 }
 jlerror > section > ol {
   line-height: 1.6;
@@ -317,29 +323,31 @@ jlerror > section > ol > li:not(.important)::marker {
   font-weight: 100;
 }
 jlerror > section > ol > li.from_this_notebook {
-  --bg: var(--jl-info-acccolor);
+  --bg: var(--vscode-badge-background);
   background: var(--bg);
   outline: 3px solid var(--bg);
   padding: 0.4em 0em;
   border-radius: 0.6em;
 }
 jlerror > section .classical-frame > mark {
-  background: var(--jlerror-mark-bg-color);
+  background: var(--vscode-editor-selectionBackground);
   border-radius: 6px;
-  color: var(--jlerror-mark-color);
-  font-family: var(--julia-mono-font-stack);
+  color: var(--vscode-editor-foreground);
+  font-family: var(--vscode-editor-font-family, monospace);
   font-variant-ligatures: none;
 }
 jlerror > section .classical-frame > mark > strong {
-  color: var(--black);
+  color: var(--vscode-foreground);
+  font-weight: 700;
 }
 jlerror > section .classical-frame s-span {
-  /* color: var(--cm-color-type); */
+  /* Type colors handled by theme */
 }
 jlerror > section .classical-frame s-span .argument_name {
-  color: var(--jlerror-mark-color);
-  color: var(--cm-color-variable);
-  color: var(--cm-color-type);
+  color: var(
+    --vscode-symbolIcon-variableForeground,
+    var(--vscode-editor-foreground)
+  );
 }
 jlerror > section .frame-source {
   display: flex;
@@ -348,12 +356,15 @@ jlerror > section .frame-source {
   /* justify-content: flex-end; */
 }
 jlerror > section .frame-source > a {
-  background: var(--jlerror-a-bg-color);
+  background: var(--vscode-textLink-activeForeground, rgba(14, 99, 156, 0.2));
   border-radius: 4px;
   padding: 1px 7px;
   text-decoration: none;
-  border-left: 3px solid var(--jlerror-a-border-left-color);
-  /* font-family: var(--system-ui-font-stack); */
+  border-left: 3px solid var(--vscode-textLink-foreground);
+  color: var(--vscode-textLink-foreground);
+}
+jlerror > section .frame-source > a:hover {
+  background: var(--vscode-textLink-activeForeground, rgba(14, 99, 156, 0.3));
 }
 jlerror > section .frame-source > a:not([href]) {
   filter: grayscale(1);
@@ -381,7 +392,7 @@ jlerror li::marker {
   border: 3px solid red;
   /* font-size: 0.7rem; */
   font-weight: 900;
-  color: var(--pluto-logs-key-color);
+  color: var(--vscode-errorForeground, red);
 }
 
 jlerror li.from_this_notebook .classical-frame {
@@ -391,13 +402,13 @@ jlerror li.from_this_notebook .classical-frame {
 jlerror li a.frame-line-preview {
   display: block;
   text-decoration: none;
-  border: 3px solid var(--cm-color-clickable-underline);
+  border: 3px solid var(--vscode-textLink-foreground);
   --br: 0.6em;
   border-radius: var(--br);
   --crop: -0.5em;
 }
 jlerror li .frame-line-preview pre:not(.asdfdsaf) {
-  background-color: var(--code-background);
+  background-color: var(--vscode-editor-background);
   padding: 0;
   border-radius: var(--br);
   overflow: hidden;
@@ -419,14 +430,17 @@ jlerror li .frame-line-preview pre > code {
   padding: 0;
 }
 jlerror li .frame-line-preview pre > code:not(:only-child).frame-line {
-  background: var(--cm-highlighted);
+  background: var(
+    --vscode-editor-selectionHighlightBackground,
+    var(--vscode-editor-selectionBackground)
+  );
 }
 jlerror li .frame-line-preview pre > code:not(.frame-line) {
   opacity: 0.7;
 }
 jlerror li .frame-line-preview pre > code::before {
   content: var(--before-content);
-  color: var(--cm-color-line-numbers);
+  color: var(--vscode-editorLineNumber-foreground);
   margin-right: 0.7em;
   width: 2ch;
   display: inline-block;
@@ -445,10 +459,10 @@ jlerror .dont-panic {
   top: 0;
   right: 0;
   padding: 0.5em;
-  background: var(--pluto-logs-debug-color);
-  color: var(--black);
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
   border-radius: 0.2em;
-  font-family: var(--system-ui-font-stack);
+  font-family: var(--vscode-font-family, system-ui);
   font-size: 1.2rem;
   font-weight: 700;
   transform: rotate(6deg);
@@ -484,15 +498,18 @@ table.pluto-table td {
 }
 
 table.pluto-table .schema-types {
-  color: var(--pluto-schema-types-color);
-  font-family: var(--julia-mono-font-stack);
+  color: var(
+    --vscode-symbolIcon-keywordForeground,
+    var(--vscode-editor-foreground)
+  );
+  font-family: var(--vscode-editor-font-family, monospace);
   font-size: 0.75rem;
   opacity: 0;
 }
 
 table.pluto-table .schema-types th {
-  border-bottom: 1px solid var(--pluto-schema-types-border-color);
-  background-color: var(--main-bg-color);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background-color: var(--vscode-editor-background);
   height: 2rem;
 }
 
@@ -512,9 +529,9 @@ table.pluto-table .schema-types th:first-child {
 
 table.pluto-table .schema-names th,
 table.pluto-table .schema-types th:first-child {
-  background-color: var(--main-bg-color);
+  background-color: var(--vscode-editor-background);
   position: sticky;
-  top: calc(0.25rem - var(--pluto-cell-spacing));
+  top: 0.25rem;
   height: 2rem;
   z-index: 1;
 }
@@ -524,7 +541,7 @@ table.pluto-table thead:hover .schema-names th {
 }
 
 table.pluto-table tbody th:first-child {
-  background-color: var(--main-bg-color);
+  background-color: var(--vscode-editor-background);
   position: sticky;
   left: -10px; /* padding-left of pluto-output*/
   white-space: nowrap;
