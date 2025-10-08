@@ -246,9 +246,7 @@ jlerror {
   display: block;
   padding: 1em;
   background-color: var(--vscode-textCodeBlock-background);
-  border: 1px solid
-    var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border));
-  border-radius: 0.6em;
+  border-radius: 0.3em;
   margin: 1em 0;
   overflow-wrap: break-word;
 }
@@ -300,7 +298,7 @@ jlerror .stacktrace-waiting-to-view button {
   color: var(--vscode-button-foreground);
   font-family: var(--vscode-font-family, system-ui);
   cursor: pointer;
-  font-weight: 700;
+  font-weight: 500;
 }
 jlerror .stacktrace-waiting-to-view button:hover {
   background: var(--vscode-button-hoverBackground);
