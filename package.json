@@ -47,6 +47,9 @@
         "displayName": "Pluto Notebook",
         "selector": [
           {
+            "filenamePattern": "*.pluto.jl"
+          },
+          {
             "filenamePattern": "*.dyad.jl"
           }
         ]
