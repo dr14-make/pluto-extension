@@ -51,8 +51,20 @@ export function PlutoOutput({ state, context }: PlutoOutputProps) {
       switch (message.type) {
         case "setState": {
           const state = message.state as CellResultData;
+
+          // the state (which comes from `execution.replaceOutput([formatCellOutput])`)) is
+          // serialized differently than postMessage (which JSONifies stuff)
+          // Here we adjust for the case of binary data (e.g. svg/other images)
+          // which leave the websocket as UintArrays and get JSON.stringified to {0: byte...}
+          // TODO: this probably needs to happen at @plutojl/rainbow (which would then guarantee serializability)
+          // or at the controller (so the passed object is smaller)
+          // Since this only happens once per image, it's probably _fine_ --pg
+          if (state.output.mime && typeof state.output.body === "object") {
+            state.output.body = new TextDecoder().decode(
+              new Uint8Array(Object.values(state.output.body)).buffer
+            );
+          }
           setLocalState(state);
-          state; // fake worker
 
           const logs = state.logs.filter((log) => {
             return (
@@ -97,10 +109,10 @@ export function PlutoOutput({ state, context }: PlutoOutputProps) {
   }
   <${OutputBody}
     cell_id=${state.cell_id}
-    persist_js_state="${false}"
+    persist_js_state="${true}"
     body="${localState.output?.body}"
     mime="${localState.output?.mime}"
-    sanitize_html="${false}"
+    sanitize_html="${false /* Maybe reconsider */}"
   ></${OutputBody}>
   ${
     terminal?.length
