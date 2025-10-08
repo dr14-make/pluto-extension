@@ -2,12 +2,12 @@ import {
   CellResultData,
   PROGRESS_LOG_LEVEL,
   STDOUT_LOG_LEVEL,
-  Worker,
 } from "@plutojl/rainbow";
 
 import {
   html,
   OutputBody,
+  ANSITextOutput,
   useEffect,
   setup_mathjax,
   useState,
@@ -32,9 +32,12 @@ interface PlutoOutputProps {
   state: CellResultData;
   context: RendererContext<void>;
 }
-const cutMime = (s: { msg: string }) => {
-  return s.msg.slice(0, s.msg.lastIndexOf(","));
+const cutMime = (s: { msg: string }, l = 88) => {
+  return (s?.msg?.slice(0, s.msg.lastIndexOf(",")) ?? ``)
+    .toString()
+    .padEnd(l, ` `);
 };
+
 export function PlutoOutput({ state, context }: PlutoOutputProps) {
   useMathjaxEffect();
   const [localState, setLocalState] = useState(state);
@@ -81,6 +84,16 @@ export function PlutoOutput({ state, context }: PlutoOutputProps) {
   }, [state.cell_id, context]);
 
   return html`
+  <style>
+    details {
+      max-height: 14rem;
+      overflow: auto;
+    }
+    pluto-output > assignee ~ * {
+      max-height: 18rem;
+      overflow: auto;
+    }
+  </style>
   ${
     state.running && progress
       ? html`<div>
@@ -95,7 +108,6 @@ export function PlutoOutput({ state, context }: PlutoOutputProps) {
       : null
   }
   <${OutputBody}
-    cell_id=${state.cell_id}
     persist_js_state="${true}"
     body="${localState.output?.body}"
     mime="${localState.output?.mime}"
@@ -103,9 +115,11 @@ export function PlutoOutput({ state, context }: PlutoOutputProps) {
   ></${OutputBody}>
   ${
     terminal?.length
-      ? html`<details open>
+      ? html`<details>
           <summary>stdout</summary>
-          <pre>${terminal.map(cutMime).join("\n")}</pre>
+          <${ANSITextOutput}
+            body="${terminal.map(cutMime).join("\n")}"
+          ></${ANSITextOutput}>
         </details>`
       : null
   }
@@ -113,7 +127,9 @@ export function PlutoOutput({ state, context }: PlutoOutputProps) {
     logs?.length
       ? html`<details open>
           <summary>Logs</summary>
-          <pre>${logs.map(cutMime).join("\n")}</pre>
+            <${ANSITextOutput} 
+               body="${logs.map(cutMime).join("\n")}"
+             ></${ANSITextOutput}>
         </details>`
       : null
   }`;
