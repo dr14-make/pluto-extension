@@ -246,7 +246,7 @@ jlerror {
   display: block;
   padding: 1em;
   background-color: var(--vscode-textCodeBlock-background);
-  border: 3px solid
+  border: 1px solid
     var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border));
   border-radius: 0.6em;
   margin: 1em 0;
@@ -255,17 +255,16 @@ jlerror {
 
 jlerror > header {
   color: var(--vscode-errorForeground);
-  border-left: 3px solid var(--vscode-errorForeground);
+  border-left: 1px solid var(--vscode-errorForeground);
   padding: 0.7rem;
   background: var(--vscode-editor-background);
-  border-radius: 3px;
+  border-radius: 1px;
 }
 jlerror > header > p {
   margin-block-end: 0.2em;
   white-space: pre-wrap;
 }
 jlerror > header > p:first-child {
-  font-weight: bold;
   margin-block-start: 0;
 }
 jlerror .stacktrace-header,
@@ -276,12 +275,12 @@ jlerror .error-header {
   margin-block-end: 1em;
 }
 jlerror secret-h1 {
-  font-size: 1.9rem;
+  font-size: 1.2em;
   font-weight: 700;
   color: var(--vscode-foreground);
 }
 jlerror > section {
-  border-block-start: 3px dashed
+  border-block-start: 1px dashed
     var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border));
   margin-block-start: 1rem;
   padding-block-start: 1rem;
@@ -295,8 +294,9 @@ jlerror .stacktrace-waiting-to-view {
 jlerror .stacktrace-waiting-to-view button {
   background: var(--vscode-button-background);
   border: none;
-  border-radius: 6px;
-  padding: 0.5em 1em;
+  border-radius: 3px;
+  padding: 0.2em 0.4em;
+  font-size: 1em;
   color: var(--vscode-button-foreground);
   font-family: var(--vscode-font-family, system-ui);
   cursor: pointer;
@@ -448,6 +448,7 @@ jlerror li .frame-line-preview pre > code:last-of-type:not(.frame-line) {
 }
 
 jlerror .dont-panic {
+  display: none;
   position: absolute;
   top: 0;
   right: 0;
