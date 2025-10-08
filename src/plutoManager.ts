@@ -145,7 +145,7 @@ export class PlutoManager {
 
     // Close all workers
     for (const worker of this.workers.values()) {
-      worker.close();
+      worker.shutdown();
     }
     this.workers.clear();
 
@@ -291,7 +291,7 @@ export class PlutoManager {
     const worker = this.workers.get(notebookPath);
 
     if (worker) {
-      worker.close();
+      worker.shutdown();
       this.workers.delete(notebookPath);
     }
   }
@@ -346,7 +346,7 @@ export class PlutoManager {
    */
   dispose(): void {
     for (const worker of this.workers.values()) {
-      worker.close();
+      worker.shutdown();
     }
     this.workers.clear();
 
