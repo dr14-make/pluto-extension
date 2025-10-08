@@ -84,16 +84,6 @@ export function PlutoOutput({ state, context }: PlutoOutputProps) {
   }, [state.cell_id, context]);
 
   return html`
-  <style>
-    details {
-      max-height: 14rem;
-      overflow: auto;
-    }
-    pluto-output > assignee ~ * {
-      max-height: 18rem;
-      overflow: auto;
-    }
-  </style>
   ${
     state.running && progress
       ? html`<div>

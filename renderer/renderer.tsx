@@ -6,6 +6,8 @@ import type {
 import { PlutoOutput } from "./components/PlutoOutput";
 import { html, PlutoActionsContext, render } from "@plutojl/rainbow/ui";
 import { CellResultData } from "@plutojl/rainbow";
+import plutoOutputStyles from "./styles/pluto-output.css";
+import treeStyles from "./styles/tree.css";
 
 /**
  * Communication bridge for sending messages to the controller
@@ -24,9 +26,23 @@ export function postMessageToController(message: any): void {
   }
 }
 
+// Inject styles into the document
+function injectStyles() {
+  const styleId = "pluto-renderer-styles";
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement("style");
+    style.id = styleId;
+    style.textContent = plutoOutputStyles + "\n" + treeStyles;
+    document.head.appendChild(style);
+  }
+}
+
 export const activate: ActivationFunction = (
   context: RendererContext<void>
 ) => {
+  // Inject styles once when renderer activates
+  injectStyles();
+
   // Store messaging API for use in components
   messagingApi = context.postMessage;
   return {

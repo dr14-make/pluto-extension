@@ -80,6 +80,7 @@ async function main() {
     loader: {
       ".tsx": "tsx",
       ".ts": "tsx",
+      ".css": "text",
     },
   });
 
