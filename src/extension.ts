@@ -13,6 +13,7 @@ import {
   cleanupMCPServer,
 } from "./mcp-server-http.ts";
 import { PlutoTerminalProvider } from "./plutoTerminal.ts";
+import { PlutoStatusBar } from "./statusBar.ts";
 
 export async function activate(context: vscode.ExtensionContext) {
   // Create controller output channel
@@ -85,6 +86,10 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register all commands
   registerAllCommands(context, plutoManager);
+
+  // Create and register status bar
+  const statusBar = new PlutoStatusBar(plutoManager);
+  context.subscriptions.push(statusBar);
 
   // Register terminal profile provider
   const terminalOutputChannel =

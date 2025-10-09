@@ -150,6 +150,38 @@ export function registerOpenInBrowserCommand(
 }
 
 /**
+ * Command: Toggle Pluto server (start/stop)
+ */
+export function registerToggleServerCommand(
+  context: vscode.ExtensionContext,
+  plutoManager: PlutoManager
+): void {
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "pluto-notebook.toggleServer",
+      async () => {
+        if (plutoManager.isRunning()) {
+          // Server is running, stop it
+          try {
+            await plutoManager.stop();
+            vscode.window.showInformationMessage("Pluto server stopped");
+          } catch (error) {
+            const errorMessage =
+              error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(
+              `Failed to stop Pluto server: ${errorMessage}`
+            );
+          }
+        } else {
+          // Server is stopped, start it
+          await startServerWithProgress(plutoManager, "Pluto server started");
+        }
+      }
+    )
+  );
+}
+
+/**
  * Initialize Pluto server on activation (exported for use in extension.ts)
  */
 export async function initializePlutoServer(
