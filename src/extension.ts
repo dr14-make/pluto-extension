@@ -14,7 +14,7 @@ import {
 } from "./mcp-server-http.ts";
 import { PlutoTerminalProvider } from "./plutoTerminal.ts";
 import { PlutoStatusBar } from "./statusBar.ts";
-import { registerNotebooksTreeView } from "./notebooksTreeView.ts";
+import { registerNotebooksTreeView } from "./treeView/notebooksTreeView.ts";
 
 export async function activate(context: vscode.ExtensionContext) {
   // Create controller output channel

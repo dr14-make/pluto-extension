@@ -15,7 +15,7 @@ export * from "./plutoServerCommands.ts";
 export * from "./mcpServerCommands.ts";
 export * from "./mcpConfigCommands.ts";
 export * from "./terminalCommands.ts";
-
+export * from "./notebooksTreeCommands.ts";
 // Import for registerAllCommands
 import {
   registerStartServerCommand,
@@ -36,6 +36,11 @@ import {
   registerGetMCPHttpUrlCommand,
 } from "./mcpConfigCommands.ts";
 
+import {
+  registerFocusCellCommand,
+  revealNotebookCommand,
+  registerReconnectCommand,
+} from "./notebooksTreeCommands.ts";
 import { registerCreateTerminalCommand } from "./terminalCommands.ts";
 
 /**
@@ -69,4 +74,7 @@ export function registerAllCommands(
 
   // Register Terminal commands
   registerCreateTerminalCommand(context, plutoManager);
+  registerFocusCellCommand(context);
+  revealNotebookCommand(context);
+  registerReconnectCommand(context, plutoManager);
 }

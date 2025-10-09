@@ -330,11 +330,11 @@ export class PlutoManager {
    * Close connection to a notebook
    * const notebookPath = notebookUri.fsPath;
    */
-  closeNotebook(notebookPath: string): void {
+  async closeNotebook(notebookPath: string): Promise<void> {
     const worker = this.workers.get(notebookPath);
 
     if (worker) {
-      worker.shutdown();
+      await worker.shutdown();
       this.workers.delete(notebookPath);
 
       // Emit notebook closed event
