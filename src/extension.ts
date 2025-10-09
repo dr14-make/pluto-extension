@@ -15,13 +15,10 @@ import {
 import { PlutoTerminalProvider } from "./plutoTerminal.ts";
 
 export async function activate(context: vscode.ExtensionContext) {
-  // Create output channels
-  const serverOutputChannel = vscode.window.createOutputChannel("Pluto Server");
+  // Create controller output channel
   const controllerOutputChannel =
     vscode.window.createOutputChannel("Pluto Controller");
-  context.subscriptions.push(serverOutputChannel, controllerOutputChannel);
-
-  serverOutputChannel.appendLine("Pluto Notebook extension is now active!");
+  context.subscriptions.push(controllerOutputChannel);
 
   // Get port from configuration
   const config = vscode.workspace.getConfiguration("pluto-notebook");
@@ -33,20 +30,17 @@ export async function activate(context: vscode.ExtensionContext) {
   // Initialize shared Pluto Manager
   const plutoManager = getSharedPlutoManager(
     plutoPort,
-    {
-      appendLine: serverOutputChannel.appendLine.bind(serverOutputChannel),
-      showWarningMessage: vscode.window.showWarningMessage,
-    },
+    vscode.window.showWarningMessage,
     serverUrl || undefined
   );
   context.subscriptions.push(plutoManager);
 
   // Initialize HTTP MCP Server using the shared PlutoManager (singleton)
-  initializeMCPServer(plutoManager, mcpPort, serverOutputChannel);
+  initializeMCPServer(plutoManager, mcpPort, controllerOutputChannel);
 
   // Auto-start MCP server if configured
   if (autoStartMcp) {
-    await startMCPServer(serverOutputChannel);
+    await startMCPServer(controllerOutputChannel);
   }
 
   // Ensure MCP server is stopped and cleaned up when extension deactivates
@@ -58,7 +52,7 @@ export async function activate(context: vscode.ExtensionContext) {
   });
 
   // Start Pluto server on activation
-  await initializePlutoServer(plutoManager, serverOutputChannel);
+  await initializePlutoServer(plutoManager, controllerOutputChannel);
 
   // Register the notebook serializer
   context.subscriptions.push(

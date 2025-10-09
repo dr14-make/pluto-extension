@@ -1,7 +1,8 @@
 import "@plutojl/rainbow/node-polyfill";
 import { CellResultData, Host, Worker } from "@plutojl/rainbow";
-import { ChildProcess, spawn } from "child_process";
 import { readFile } from "fs/promises";
+import { PlutoServerTaskManager } from "./plutoServerTask.js";
+
 /**
  * Manages connection to Pluto server and notebook sessions
  */
@@ -9,18 +10,16 @@ export class PlutoManager {
   private host?: Host; // Host from @plutojl/rainbow
   private workers: Map<string, Worker> = new Map(); // notebook_id -> Worker
   private serverUrl: string;
-  private juliaProcess?: ChildProcess;
+  private taskManager: PlutoServerTaskManager;
   private usingCustomServerUrl: boolean = false;
+  private notebooksToRecreate: Set<string> = new Set(); // Paths of notebooks to recreate after reconnect
 
   constructor(
     private port: number = 1234,
-    private outputChannel: {
-      appendLine: (msg: string) => void;
-      showWarningMessage<T extends string>(
-        message: string,
-        ...items: T[]
-      ): Thenable<T | undefined>;
-    },
+    private showWarningMessage: <T extends string>(
+      message: string,
+      ...items: T[]
+    ) => Thenable<T | undefined>,
     serverUrl?: string
   ) {
     if (serverUrl) {
@@ -29,15 +28,56 @@ export class PlutoManager {
     } else {
       this.serverUrl = `http://localhost:${port}`;
     }
+
+    this.taskManager = new PlutoServerTaskManager(port);
+
+    // Register callback to reset state when server task stops
+    this.taskManager.onStop(() => {
+      this.onServerStopped();
+    });
+  }
+
+  /**
+   * Called when server task stops unexpectedly
+   */
+  private onServerStopped(): void {
+    // Store notebook paths for recreation after reconnect
+    this.notebooksToRecreate.clear();
+    for (const notebookPath of this.workers.keys()) {
+      this.notebooksToRecreate.add(notebookPath);
+    }
+
+    // Close all workers
+    for (const worker of this.workers.values()) {
+      worker.shutdown();
+    }
+    this.workers.clear();
+
+    // Reset host
+    this.host = undefined;
+
+    // Show warning to user if server stopped unexpectedly
+    if (this.taskManager.isRunning() === false) {
+      this.showWarningMessage(
+        "Pluto server stopped unexpectedly. Click 'Restart' to start it again.",
+        "Restart"
+      ).then((choice) => {
+        if (choice === "Restart") {
+          this.start().catch((error) => {
+            this.showWarningMessage(
+              `Failed to restart Pluto server: ${error.message}`
+            );
+          });
+        }
+      });
+    }
   }
 
   /**
    * Check if Pluto server is running
    */
   isRunning(): boolean {
-    return (
-      (!!this.juliaProcess || this.usingCustomServerUrl) && this.isConnected()
-    );
+    return this.taskManager.isRunning() && this.isConnected();
   }
 
   /**
@@ -48,30 +88,16 @@ export class PlutoManager {
   }
 
   /**
-   * Log message to output channel
-   */
-  log(message: string): void {
-    this.outputChannel.appendLine(message);
-  }
-
-  /**
    * Connect to an existing Pluto server without starting a new one
    */
   async connect(): Promise<void> {
     if (this.isConnected()) {
-      this.log("Already connected to a Pluto server");
       return;
     }
 
-    this.log(`Connecting to Pluto server at ${this.serverUrl}...`);
-
     try {
       this.host = new Host(this.serverUrl);
-      this.log("Connected to Pluto server successfully!");
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.log(`Failed to connect to Pluto server: ${errorMessage}`);
       throw error;
     }
   }
@@ -83,52 +109,46 @@ export class PlutoManager {
     // If using custom server URL, just connect without starting
     if (this.usingCustomServerUrl) {
       await this.connect();
+      await this.recreateWorkers();
       return;
     }
 
-    if (this.juliaProcess) {
-      this.log("Pluto server is already running");
+    // Check if already running
+    if (this.taskManager.isRunning()) {
       return;
     }
-
-    this.log(`Starting Pluto server on port ${this.port}...`);
 
     try {
-      this.juliaProcess = await this.runServer(this.port);
-      this.log("Pluto server started successfully!");
+      await this.taskManager.start();
+      await this.taskManager.waitForReady();
+      await this.connect();
 
-      // Pipe Julia stdout to output channel
-      this.juliaProcess.stdout?.on("data", (data) => {
-        this.log(data.toString());
-      });
-
-      // Pipe Julia stderr to output channel
-      this.juliaProcess.stderr?.on("data", (data) => {
-        this.log(data.toString());
-      });
-
-      // Handle process exit
-      this.juliaProcess.on("exit", (code) => {
-        this.log(`Pluto server exited with code ${code ?? "unknown"}`);
-
-        // Show warning if server exits unexpectedly
-        if (code !== 0 && code !== null) {
-          this.outputChannel.showWarningMessage(
-            `Pluto server stopped unexpectedly with exit code ${code}`
-          );
-        }
-
-        this.juliaProcess = undefined;
-        this.host = undefined;
-      });
-
-      // Initialize host connection
-      this.host = new Host(this.serverUrl);
+      // Recreate workers for notebooks that were open before server stopped
+      await this.recreateWorkers();
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.log(`Failed to start Pluto server: ${errorMessage}`);
       throw error;
+    }
+  }
+
+  /**
+   * Recreate workers for notebooks that were open before server stopped
+   */
+  private async recreateWorkers(): Promise<void> {
+    if (this.notebooksToRecreate.size === 0) {
+      return;
+    }
+
+    const notebookPaths = Array.from(this.notebooksToRecreate);
+    this.notebooksToRecreate.clear();
+
+    for (const notebookPath of notebookPaths) {
+      try {
+        // Use getWorker to recreate the worker
+        await this.getWorker(notebookPath);
+      } catch (error) {
+        // Log error but continue with other notebooks
+        console.error(`Failed to recreate worker for ${notebookPath}:`, error);
+      }
     }
   }
 
@@ -136,62 +156,26 @@ export class PlutoManager {
    * Stop Pluto server
    */
   async stop(): Promise<void> {
-    if (!this.juliaProcess) {
-      this.log("Pluto server is not running");
-      return;
-    }
-
-    this.log("Stopping Pluto server...");
-
     // Close all workers
     for (const worker of this.workers.values()) {
       worker.shutdown();
     }
     this.workers.clear();
 
-    // Kill Julia process
-    this.juliaProcess.kill();
-    this.juliaProcess = undefined;
-    this.host = undefined;
+    // Stop task
+    if (this.taskManager.isRunning()) {
+      await this.taskManager.stop();
+    }
 
-    this.log("Pluto server stopped");
+    this.host = undefined;
   }
 
   /**
    * Restart Pluto server
    */
   async restart(): Promise<void> {
-    this.log("Restarting Pluto server...");
     await this.stop();
     await this.start();
-  }
-
-  private runServer(port: number = 1234): Promise<ChildProcess> {
-    return new Promise((resolve, reject) => {
-      const julia = spawn("julia", [
-        "-e",
-        `using Pluto;Pluto.run(port=${port};require_secret_for_open_links=false, require_secret_for_access=false, launch_browser=false)`,
-      ]);
-
-      julia.stdout?.on("data", (data) => {
-        this.log(`[Server Init] ${data}`);
-        if (data.toString().includes("Go to")) {
-          resolve(julia);
-        }
-      });
-
-      julia.stderr?.on("data", (data) => {
-        this.log(`[Server Init] ${data}`);
-        if (data.toString().includes("Go to")) {
-          resolve(julia);
-        }
-      });
-
-      julia.on("error", (error) => {
-        this.outputChannel.appendLine(`[Server Init Error] ${error.message}`);
-        setTimeout(() => reject(error), 1000);
-      });
-    });
   }
 
   /**
@@ -215,8 +199,9 @@ export class PlutoManager {
         worker = await this.host.createWorker(notebookContent.trim());
         this.workers.set(notebookPath, worker);
       } catch (error) {
-        this.log(`Error reading notebook file: ${error}`);
-        throw new Error(`Cannot create worker: failed to read notebook file`);
+        throw new Error(
+          `Cannot create worker: failed to read notebook file: ${error}`
+        );
       }
     }
 
@@ -247,9 +232,6 @@ export class PlutoManager {
       const cellData = worker.getSnippet(cellId);
       return cellData?.results ?? null;
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.log(`[Cell Execution Error] ${errorMessage}`);
       throw error;
     }
   }
@@ -326,17 +308,11 @@ export class PlutoManager {
       try {
         await worker.deleteSnippets([result.cell_id]);
       } catch (deleteError) {
-        // Log but don't fail if deletion fails
-        this.log(
-          `Warning: Failed to delete ephemeral cell ${result.cell_id}: ${deleteError}`
-        );
+        // Silently ignore deletion errors for ephemeral cells
       }
 
       return result;
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.log(`[Ephemeral Execution Error] ${errorMessage}`);
       throw error;
     }
   }
@@ -350,9 +326,11 @@ export class PlutoManager {
     }
     this.workers.clear();
 
-    // Kill Julia process
-    if (this.juliaProcess) {
-      this.juliaProcess.kill();
+    // Stop task (fire and forget - dispose is not async)
+    if (this.taskManager.isRunning()) {
+      this.taskManager.stop().catch(() => {
+        // Ignore errors during dispose
+      });
     }
   }
 }

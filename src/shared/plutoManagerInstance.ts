@@ -9,17 +9,14 @@ let sharedPlutoManager: PlutoManager | undefined;
 
 export function getSharedPlutoManager(
   port: number,
-  outputChannel: {
-    appendLine: (msg: string) => void;
-    showWarningMessage<T extends string>(
-      message: string,
-      ...items: T[]
-    ): Thenable<T | undefined>;
-  },
+  showWarningMessage: <T extends string>(
+    message: string,
+    ...items: T[]
+  ) => Thenable<T | undefined>,
   serverUrl?: string
 ): PlutoManager {
   if (!sharedPlutoManager) {
-    sharedPlutoManager = new PlutoManager(port, outputChannel, serverUrl);
+    sharedPlutoManager = new PlutoManager(port, showWarningMessage, serverUrl);
   }
   return sharedPlutoManager;
 }
