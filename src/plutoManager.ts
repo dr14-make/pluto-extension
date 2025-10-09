@@ -2,6 +2,17 @@ import "@plutojl/rainbow/node-polyfill";
 import { CellResultData, Host, Worker } from "@plutojl/rainbow";
 import { readFile } from "fs/promises";
 import { PlutoServerTaskManager } from "./plutoServerTask.js";
+import { EventEmitter } from "events";
+
+/**
+ * Events emitted by PlutoManager
+ */
+export interface PlutoManagerEvents {
+  serverStateChanged: () => void;
+  notebookOpened: (notebookPath: string) => void;
+  notebookClosed: (notebookPath: string) => void;
+  cellUpdated: (notebookPath: string, cellId: string) => void;
+}
 
 /**
  * Manages connection to Pluto server and notebook sessions
@@ -13,6 +24,7 @@ export class PlutoManager {
   private taskManager: PlutoServerTaskManager;
   private usingCustomServerUrl: boolean = false;
   private notebooksToRecreate: Set<string> = new Set(); // Paths of notebooks to recreate after reconnect
+  private eventEmitter: EventEmitter = new EventEmitter();
 
   constructor(
     private port: number = 1234,
@@ -38,6 +50,36 @@ export class PlutoManager {
   }
 
   /**
+   * Register event listener
+   */
+  on<K extends keyof PlutoManagerEvents>(
+    event: K,
+    listener: PlutoManagerEvents[K]
+  ): void {
+    this.eventEmitter.on(event, listener);
+  }
+
+  /**
+   * Remove event listener
+   */
+  off<K extends keyof PlutoManagerEvents>(
+    event: K,
+    listener: PlutoManagerEvents[K]
+  ): void {
+    this.eventEmitter.off(event, listener);
+  }
+
+  /**
+   * Emit event
+   */
+  private emit<K extends keyof PlutoManagerEvents>(
+    event: K,
+    ...args: Parameters<PlutoManagerEvents[K]>
+  ): void {
+    this.eventEmitter.emit(event, ...args);
+  }
+
+  /**
    * Called when server task stops unexpectedly
    */
   private onServerStopped(): void {
@@ -55,6 +97,9 @@ export class PlutoManager {
 
     // Reset host
     this.host = undefined;
+
+    // Emit server state changed event
+    this.emit("serverStateChanged");
 
     // Show warning to user if server stopped unexpectedly
     if (this.taskManager.isRunning() === false) {
@@ -123,6 +168,9 @@ export class PlutoManager {
       await this.taskManager.waitForReady();
       await this.connect();
 
+      // Emit server state changed event
+      this.emit("serverStateChanged");
+
       // Recreate workers for notebooks that were open before server stopped
       await this.recreateWorkers();
     } catch (error) {
@@ -168,6 +216,9 @@ export class PlutoManager {
     }
 
     this.host = undefined;
+
+    // Emit server state changed event
+    this.emit("serverStateChanged");
   }
 
   /**
@@ -198,6 +249,9 @@ export class PlutoManager {
         notebookContent = new TextDecoder().decode(fileContent);
         worker = await this.host.createWorker(notebookContent.trim());
         this.workers.set(notebookPath, worker);
+
+        // Emit notebook opened event
+        this.emit("notebookOpened", notebookPath);
       } catch (error) {
         throw new Error(
           `Cannot create worker: failed to read notebook file: ${error}`
@@ -234,6 +288,13 @@ export class PlutoManager {
     } catch (error) {
       throw error;
     }
+  }
+
+  /**
+   * Emit cell updated event (to be called by controller)
+   */
+  emitCellUpdated(notebookPath: string, cellId: string): void {
+    this.emit("cellUpdated", notebookPath, cellId);
   }
 
   /**
@@ -275,6 +336,9 @@ export class PlutoManager {
     if (worker) {
       worker.shutdown();
       this.workers.delete(notebookPath);
+
+      // Emit notebook closed event
+      this.emit("notebookClosed", notebookPath);
     }
   }
 

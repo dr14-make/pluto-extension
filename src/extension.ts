@@ -14,6 +14,7 @@ import {
 } from "./mcp-server-http.ts";
 import { PlutoTerminalProvider } from "./plutoTerminal.ts";
 import { PlutoStatusBar } from "./statusBar.ts";
+import { registerNotebooksTreeView } from "./notebooksTreeView.ts";
 
 export async function activate(context: vscode.ExtensionContext) {
   // Create controller output channel
@@ -90,6 +91,9 @@ export async function activate(context: vscode.ExtensionContext) {
   // Create and register status bar
   const statusBar = new PlutoStatusBar(plutoManager);
   context.subscriptions.push(statusBar);
+
+  // Register notebooks tree view
+  registerNotebooksTreeView(context, plutoManager);
 
   // Register terminal profile provider
   const terminalOutputChannel =

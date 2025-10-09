@@ -85,6 +85,16 @@
         }
       ]
     },
+    "views": {
+      "explorer": [
+        {
+          "id": "plutoNotebooks",
+          "name": "Pluto Notebooks",
+          "icon": "$(notebook)",
+          "contextualTitle": "Pluto Notebooks"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "pluto-notebook.startServer",
@@ -140,8 +150,39 @@
         "command": "pluto-notebook.createTerminal",
         "title": "💻 Pluto: Create Terminal",
         "icon": "$(terminal)"
+      },
+      {
+        "command": "pluto-notebook.refreshNotebooks",
+        "title": "🔄 Pluto: Refresh Notebooks Tree",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "pluto-notebook.reconnectNotebook",
+        "title": "🔌 Pluto: Reconnect Notebook",
+        "icon": "$(debug-disconnect)"
       }
-    ]
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "pluto-notebook.refreshNotebooks",
+          "when": "view == plutoNotebooks",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "pluto-notebook.reconnectNotebook",
+          "when": "view == plutoNotebooks && viewItem == plutoNotebook",
+          "group": "inline"
+        },
+        {
+          "command": "pluto-notebook.openNotebookFromTree",
+          "when": "view == plutoNotebooks && viewItem == plutoNotebook",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run check-types && npm run lint && node esbuild.js --production",
