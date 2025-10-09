@@ -26,12 +26,22 @@ export function createVsCodeCellFromPlutoCell(
     return undefined;
   }
 
-  const code = cellInput.code || "";
-  const isMarkdown = false;
+  let code = cellInput.code || "";
+
+  // Check if cell is markdown by looking for #VSCODE-MARKDOWN marker or md""" wrapper
+  const isVSCodeMarkdown = isMarkdownCell(code);
+  const hasMarkdownWrapper = /^\s*md"""/.test(code);
+  const isMarkdown = isVSCodeMarkdown && hasMarkdownWrapper;
+
+  // Extract markdown content from md"""...""" wrapper
+  if (hasMarkdownWrapper) {
+    code = extractMarkdownContent(code);
+  }
+
   const cellData = new vscode.NotebookCellData(
     isMarkdown ? vscode.NotebookCellKind.Markup : vscode.NotebookCellKind.Code,
     code,
-    "julia"
+    isMarkdown ? "markdown" : "julia"
   );
 
   cellData.metadata = {
@@ -86,10 +96,11 @@ export async function serializePlutoNotebook(
   for (const cell of cells) {
     const cellId = cell.metadata?.pluto_cell_id || generateCellId();
 
-    // Wrap markdown cells in md"""..."""
+    // Wrap markdown cells in md"""...""" and add #VSCODE-MARKDOWN marker
     let code = cell.value;
     if (cell.kind === vscode.NotebookCellKind.Markup) {
-      code = `md"""\n${cell.value}\n"""`;
+      // Add #VSCODE-MARKDOWN marker as first line, followed by md""" wrapper
+      code = `#VSCODE-MARKDOWN\nmd"""\n${cell.value}\n"""`;
     }
 
     cellInputs[cellId] = {
@@ -132,10 +143,32 @@ export async function serializePlutoNotebook(
 }
 
 /**
+ * Extract markdown content from md"""...""" wrapper
+ * Handles newlines, spaces, and all characters within the quotes
+ */
+export function extractMarkdownContent(code: string): string {
+  // Match triple-quote markdown: md"""CONTENT"""
+  // [\s\S] matches any character including newlines
+  const tripleQuoteMatch = code.match(/^\s*md"""([\s\S]*?)"""\s*$/);
+  if (tripleQuoteMatch) {
+    return tripleQuoteMatch[1];
+  }
+
+  // Match single-quote markdown: md"content"
+  const singleQuoteMatch = code.match(/^\s*md"([^"]*)"\s*$/);
+  if (singleQuoteMatch) {
+    return singleQuoteMatch[1];
+  }
+
+  // If no match, return as-is (might already be extracted)
+  return code;
+}
+
+/**
  * Detect if code is markdown
  */
 export function isMarkdownCell(code: string): boolean {
-  return /^\s*md"/.test(code);
+  return /^\s*#VSCODE-MARKDOWN/.test(code);
 }
 
 /**
