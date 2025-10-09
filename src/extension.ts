@@ -104,7 +104,8 @@ export async function activate(context: vscode.ExtensionContext) {
       ): vscode.ProviderResult<vscode.TerminalProfile> {
         const pty = new PlutoTerminalProvider(
           plutoManager,
-          terminalOutputChannel
+          terminalOutputChannel,
+          context
         );
         return new vscode.TerminalProfile({
           name: "Pluto Terminal",

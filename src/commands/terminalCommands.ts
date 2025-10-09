@@ -20,7 +20,7 @@ export function registerCreateTerminalCommand(
   const command = vscode.commands.registerCommand(
     "pluto-notebook.createTerminal",
     () => {
-      createPlutoTerminal(plutoManager, terminalOutputChannel);
+      createPlutoTerminal(plutoManager, terminalOutputChannel, context);
     }
   );
 

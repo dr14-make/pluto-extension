@@ -1,5 +1,11 @@
 import * as vscode from "vscode";
 import { PlutoManager } from "./plutoManager.ts";
+import { TerminalOutputWebviewProvider } from "./terminalOutputWebview.ts";
+import {
+  getExampleCommand,
+  isExampleCommand,
+  getExampleCommandsHelp,
+} from "./terminalExamples.ts";
 
 /**
  * Pluto Terminal - An interactive terminal for executing Julia code in Pluto notebooks
@@ -14,12 +20,22 @@ export class PlutoTerminalProvider implements vscode.Pseudoterminal {
 
   private notebookPath?: string;
   private inputBuffer = "";
+  private cursorPosition = 0; // Position in the input buffer
   private isExecuting = false;
+  private context?: vscode.ExtensionContext;
+
+  // Command history
+  private commandHistory: string[] = [];
+  private historyIndex = -1;
+  private currentInput = "";
 
   constructor(
     private plutoManager: PlutoManager,
-    private outputChannel: vscode.OutputChannel
-  ) {}
+    private outputChannel: vscode.OutputChannel,
+    context?: vscode.ExtensionContext
+  ) {
+    this.context = context;
+  }
 
   /**
    * Called when the terminal is opened
@@ -204,7 +220,9 @@ using InteractiveUtils
     if (this.isExecuting) {
       return;
     }
-    this.write("\x1b[1;32mjulia>\x1b[0m ");
+    // Show connection status in prompt
+    const status = this.notebookPath ? "" : "\x1b[33m[disconnected]\x1b[0m ";
+    this.write(`${status}\x1b[1;32mjulia>\x1b[0m `);
   }
 
   /**
@@ -217,17 +235,35 @@ using InteractiveUtils
       this.write("\r\n");
       const command = this.inputBuffer.trim();
       this.inputBuffer = "";
+      this.cursorPosition = 0;
 
       if (command) {
+        // Add to history (avoid duplicates)
+        if (
+          this.commandHistory.length === 0 ||
+          this.commandHistory[this.commandHistory.length - 1] !== command
+        ) {
+          this.commandHistory.push(command);
+        }
+        // Reset history navigation
+        this.historyIndex = -1;
+        this.currentInput = "";
+
         this.executeCommand(command);
       } else {
         this.writePrompt();
       }
     } else if (data === "\x7f") {
-      // Backspace
-      if (this.inputBuffer.length > 0) {
-        this.inputBuffer = this.inputBuffer.slice(0, -1);
-        this.write("\x1b[D \x1b[D"); // Move back, write space, move back again
+      // Backspace - delete character before cursor
+      if (this.cursorPosition > 0) {
+        // Remove character at cursor position - 1
+        this.inputBuffer =
+          this.inputBuffer.slice(0, this.cursorPosition - 1) +
+          this.inputBuffer.slice(this.cursorPosition);
+        this.cursorPosition--;
+
+        // Redraw line from cursor position
+        this.redrawLine();
       }
     } else if (data === "\x03") {
       // Ctrl+C - interrupt
@@ -238,14 +274,182 @@ using InteractiveUtils
         this.writePrompt();
       } else {
         this.inputBuffer = "";
+        this.cursorPosition = 0;
         this.write("\r\n");
         this.writePrompt();
       }
-    } else {
-      // Regular character
-      this.inputBuffer += data;
-      this.write(data);
+    } else if (data === "\x1b[A") {
+      // Arrow Up - previous command
+      this.navigateHistory("up");
+    } else if (data === "\x1b[B") {
+      // Arrow Down - next command
+      this.navigateHistory("down");
+    } else if (data === "\x1b[C") {
+      // Arrow Right - move cursor right
+      if (this.cursorPosition < this.inputBuffer.length) {
+        this.cursorPosition++;
+        this.write("\x1b[C"); // Move cursor right
+      }
+    } else if (data === "\x1b[D") {
+      // Arrow Left - move cursor left
+      if (this.cursorPosition > 0) {
+        this.cursorPosition--;
+        this.write("\x1b[D"); // Move cursor left
+      }
+    } else if (data === "\x1b[3~") {
+      // Delete key - delete character at cursor
+      if (this.cursorPosition < this.inputBuffer.length) {
+        this.inputBuffer =
+          this.inputBuffer.slice(0, this.cursorPosition) +
+          this.inputBuffer.slice(this.cursorPosition + 1);
+
+        // Redraw line from cursor position
+        this.redrawLine();
+      }
+    } else if (data === "\x1b[H" || data === "\x01") {
+      // Home key or Ctrl+A - move to start
+      this.moveCursorTo(0);
+    } else if (data === "\x1b[F" || data === "\x05") {
+      // End key or Ctrl+E - move to end
+      this.moveCursorTo(this.inputBuffer.length);
+    } else if (data.length > 0 && !data.startsWith("\x1b")) {
+      // Regular printable character(s) or paste - insert at cursor position
+      // Filter out non-printable characters except newlines
+      const printable = data.replace(/[\x00-\x08\x0B-\x1F\x7F]/g, "");
+
+      if (printable.length > 0) {
+        this.inputBuffer =
+          this.inputBuffer.slice(0, this.cursorPosition) +
+          printable +
+          this.inputBuffer.slice(this.cursorPosition);
+        this.cursorPosition += printable.length;
+
+        // Redraw line from cursor position
+        this.redrawLine();
+      }
     }
+  }
+
+  /**
+   * Redraw the current input line
+   */
+  private redrawLine(): void {
+    // Save cursor position
+    const savedCursor = this.cursorPosition;
+
+    // Clear line and redraw
+    this.clearCurrentLine();
+    this.writePrompt();
+    this.write(this.inputBuffer);
+
+    // Move cursor back to saved position
+    const distanceFromEnd = this.inputBuffer.length - savedCursor;
+    if (distanceFromEnd > 0) {
+      this.write(`\x1b[${distanceFromEnd}D`); // Move left N characters
+    }
+  }
+
+  /**
+   * Move cursor to specific position in input buffer
+   */
+  private moveCursorTo(position: number): void {
+    const newPosition = Math.max(
+      0,
+      Math.min(position, this.inputBuffer.length)
+    );
+    const delta = newPosition - this.cursorPosition;
+
+    if (delta > 0) {
+      // Move right
+      this.write(`\x1b[${delta}C`);
+    } else if (delta < 0) {
+      // Move left
+      this.write(`\x1b[${-delta}D`);
+    }
+
+    this.cursorPosition = newPosition;
+  }
+
+  /**
+   * Navigate command history
+   */
+  private navigateHistory(direction: "up" | "down"): void {
+    if (this.commandHistory.length === 0) {
+      return;
+    }
+
+    // Save current input when starting to navigate
+    if (this.historyIndex === -1) {
+      this.currentInput = this.inputBuffer;
+    }
+
+    if (direction === "up") {
+      // Move to previous command
+      if (this.historyIndex === -1) {
+        // Start from the most recent command
+        this.historyIndex = this.commandHistory.length - 1;
+      } else if (this.historyIndex > 0) {
+        this.historyIndex--;
+      }
+    } else {
+      // Move to next command
+      if (this.historyIndex !== -1) {
+        this.historyIndex++;
+        if (this.historyIndex >= this.commandHistory.length) {
+          // Back to current input
+          this.historyIndex = -1;
+        }
+      }
+    }
+
+    // Update input buffer with history or current input
+    const newInput =
+      this.historyIndex === -1
+        ? this.currentInput
+        : this.commandHistory[this.historyIndex];
+
+    // Clear current line and write new input
+    this.clearCurrentLine();
+    this.writePrompt();
+    this.inputBuffer = newInput;
+    this.cursorPosition = newInput.length; // Cursor at end
+    this.write(newInput);
+  }
+
+  /**
+   * Clear the current input line
+   */
+  private clearCurrentLine(): void {
+    // Move cursor to beginning of line, clear to end
+    this.write("\r\x1b[K");
+  }
+
+  /**
+   * Wait for worker to become idle
+   */
+  private async waitForIdle(worker: any): Promise<void> {
+    const maxWaitTime = 2 * 60000; // 60 seconds max
+    const checkInterval = 500; // Check every 500ms
+    const startTime = Date.now();
+
+    while (!worker.isIdle()) {
+      // Check if we've exceeded max wait time
+      if (Date.now() - startTime > maxWaitTime) {
+        throw new Error(
+          "Timeout waiting for notebook to become idle (60 seconds)"
+        );
+      }
+
+      // Wait before checking again
+      await new Promise((resolve) => setTimeout(resolve, checkInterval));
+
+      // Show progress indicator every 2 seconds
+      if ((Date.now() - startTime) % 2000 < checkInterval) {
+        this.write("\x1b[33m.\x1b[0m");
+      }
+    }
+
+    this.write("\r\n");
   }
 
   /**
@@ -259,7 +463,11 @@ using InteractiveUtils
 
     // Handle special commands
     if (code.startsWith(".")) {
-      await this.handleSpecialCommand(code);
+      if (!isExampleCommand(code)) {
+        return this.handleSpecialCommand(code);
+      }
+
+      code = this.handleExampleCommand(code);
       return;
     }
 
@@ -273,18 +481,21 @@ using InteractiveUtils
     this.isExecuting = true;
 
     try {
-      // Ensure server is running
-      if (!this.plutoManager.isRunning()) {
-        this.write("\x1b[33mStarting Pluto server...\x1b[0m\r\n");
-        await this.plutoManager.start();
-        this.write("\x1b[32m✓ Server started\x1b[0m\r\n\r\n");
-      }
-
       // Get worker from PlutoManager (it handles creation/caching)
       const worker = await this.plutoManager.getWorker(this.notebookPath);
 
       if (!worker) {
         throw new Error("Failed to get worker for notebook");
+      }
+
+      // Check if notebook is busy
+      if (!worker.isIdle()) {
+        this.write(
+          "\x1b[33m⏳ Notebook is busy executing, waiting for turn...\x1b[0m\r\n"
+        );
+
+        // Wait for notebook to become idle
+        await this.waitForIdle(worker);
       }
 
       // Execute code ephemerally using PlutoManager
@@ -320,6 +531,49 @@ using InteractiveUtils
       return;
     }
 
+    // Check if this should be shown in webview (rich content)
+    const shouldUseWebview = this.shouldUseWebview(mime);
+
+    if (shouldUseWebview && this.context) {
+      // Show in webview using existing renderer
+      this.write(`\x1b[36m[Rich Output: ${mime}]\x1b[0m\r\n`);
+      this.write(`\x1b[2mOpening in webview...\x1b[0m\r\n`);
+
+      try {
+        TerminalOutputWebviewProvider.showLatestOutput(this.context, result);
+        this.write(`\x1b[32m✓ Output displayed in webview\x1b[0m\r\n`);
+      } catch (error) {
+        this.write(`\x1b[31mError opening webview: ${error}\x1b[0m\r\n`);
+        // Fallback to terminal rendering
+        await this.renderInTerminal(mime, body);
+      }
+      return;
+    }
+
+    // Render in terminal
+    await this.renderInTerminal(mime, body);
+  }
+
+  /**
+   * Determine if output should be shown in webview
+   */
+  private shouldUseWebview(mime: string): boolean {
+    const richMimeTypes = [
+      "text/html",
+      "image/png",
+      "image/jpeg",
+      "image/gif",
+      "image/svg+xml",
+      "application/vnd.plotly.v1+json",
+      "application/vnd.vegalite.v4+json",
+    ];
+    return richMimeTypes.includes(mime);
+  }
+
+  /**
+   * Render output in the terminal (text-based)
+   */
+  private async renderInTerminal(mime: string, body: any): Promise<void> {
     try {
       switch (mime) {
         case "text/plain":
@@ -327,14 +581,15 @@ using InteractiveUtils
           break;
 
         case "text/html":
-          this.renderHtmlOutput(body);
+          this.renderHtmlAsText(body);
           break;
 
         case "image/png":
         case "image/jpeg":
         case "image/gif":
         case "image/svg+xml":
-          await this.renderImageOutput(mime, body);
+          this.write(`\x1b[36m[Image: ${mime}]\x1b[0m\r\n`);
+          this.write(`\x1b[2m(Image content not shown in terminal)\x1b[0m\r\n`);
           break;
 
         case "application/json":
@@ -366,9 +621,9 @@ using InteractiveUtils
   }
 
   /**
-   * Render HTML output (simplified - extract text)
+   * Render HTML output as text (simplified - extract text)
    */
-  private renderHtmlOutput(html: string): void {
+  private renderHtmlAsText(html: string): void {
     // Strip HTML tags for terminal display
     const text = html
       .replace(/<br\s*\/?>/gi, "\n")
@@ -388,48 +643,6 @@ using InteractiveUtils
     this.write(
       `\x1b[2m(Use .view to open HTML output in external viewer)\x1b[0m\r\n`
     );
-  }
-
-  /**
-   * Render image output
-   */
-  private async renderImageOutput(mime: string, body: any): Promise<void> {
-    try {
-      // Images can't be displayed directly in terminal
-      // Show a message and offer to save/open
-      this.write(`\x1b[36m[Image Output: ${mime}]\x1b[0m\r\n`);
-      this.write(
-        `\x1b[2m(Images cannot be displayed in terminal. Use .save to save the image)\x1b[0m\r\n`
-      );
-
-      // Optionally, automatically show in VSCode's image viewer
-      const show = await vscode.window.showInformationMessage(
-        "Image output generated. Would you like to view it?",
-        "View",
-        "Dismiss"
-      );
-
-      if (show === "View") {
-        // Create temporary file and open it
-        const ext = mime.split("/")[1];
-        const tmpUri = vscode.Uri.file(`/tmp/pluto-output.${ext}`);
-
-        let buffer: Buffer;
-        if (typeof body === "string") {
-          // Base64 encoded
-          buffer = Buffer.from(body, "base64");
-        } else if (body instanceof Uint8Array) {
-          buffer = Buffer.from(body);
-        } else {
-          throw new Error("Unsupported image body format");
-        }
-
-        await vscode.workspace.fs.writeFile(tmpUri, buffer);
-        await vscode.commands.executeCommand("vscode.open", tmpUri);
-      }
-    } catch (error) {
-      this.write(`\x1b[31mError displaying image: ${error}\x1b[0m\r\n`);
-    }
   }
 
   /**
@@ -501,6 +714,8 @@ using InteractiveUtils
     this.write("  .status      - Show terminal status\r\n");
     this.write("  .clear       - Clear the terminal\r\n");
     this.write("\r\n");
+    this.write(getExampleCommandsHelp());
+    this.write("\r\n");
     this.write("\x1b[1;36mTips:\x1b[0m\r\n");
     this.write("  - Type Julia code to execute it in the notebook\r\n");
     this.write("  - Press Ctrl+C to cancel current execution\r\n");
@@ -528,6 +743,29 @@ using InteractiveUtils
       this.write(`    \x1b[2m${nb.path}\x1b[0m\r\n`);
     }
     this.write("\r\n");
+  }
+
+  /**
+   * Handle example commands
+   */
+  private handleExampleCommand(command: string): string {
+    const example = getExampleCommand(command);
+    if (!example) {
+      this.write(
+        `\x1b[31mExample command not found: ${command}\x1b[0m\r\n\r\n`
+      );
+      this.writePrompt();
+      return "";
+    }
+
+    this.write(`\x1b[36m▶ Running example: ${example.description}\x1b[0m\r\n`);
+    this.write(
+      `\x1b[2m${example.code.substring(0, 60)}${
+        example.code.length > 60 ? "..." : ""
+      }\x1b[0m\r\n\r\n`
+    );
+
+    return example.code;
   }
 
   /**
@@ -586,9 +824,10 @@ using InteractiveUtils
  */
 export function createPlutoTerminal(
   plutoManager: PlutoManager,
-  outputChannel: vscode.OutputChannel
+  outputChannel: vscode.OutputChannel,
+  context: vscode.ExtensionContext
 ): vscode.Terminal {
-  const pty = new PlutoTerminalProvider(plutoManager, outputChannel);
+  const pty = new PlutoTerminalProvider(plutoManager, outputChannel, context);
 
   const terminal = vscode.window.createTerminal({
     name: "Pluto Terminal",
