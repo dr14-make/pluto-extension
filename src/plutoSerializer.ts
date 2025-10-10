@@ -1,6 +1,9 @@
 import { CellInputData, NotebookData } from "@plutojl/rainbow";
 import { parse, serialize } from "./rainbowAdapter.ts";
 import * as vscode from "vscode";
+import { formatCellOutput } from "./serializer.ts";
+import { validate } from "uuid";
+import { v4 as uuidv4 } from "uuid";
 
 /**
  * Pure functions for Pluto notebook parsing and serialization
@@ -21,19 +24,37 @@ export function createVsCodeCellFromPlutoCell(
   notebookData: NotebookData,
   plutoCellId: string
 ) {
+  // Validate UUID
   const cellInput = notebookData.cell_inputs[plutoCellId];
-  if (!cellInput) {
-    return undefined;
+
+  if (!validate(plutoCellId) || !cellInput) {
+    throw new Error(
+      `Invalid or missing cell ID: ${plutoCellId} fix in the code`
+    );
   }
 
-  const code = cellInput.code || "";
-  const isMarkdown = false;
+  let code = cellInput.code || "";
+
+  // Check if cell is markdown by looking for #VSCODE-MARKDOWN marker or md""" wrapper
+  const isVSCodeMarkdown = isMarkdownCell(code);
+  const hasMarkdownWrapper = /^\s*md"""/.test(code);
+  const isMarkdown = isVSCodeMarkdown && hasMarkdownWrapper;
+
+  // Extract markdown content from md"""...""" wrapper
+  if (isMarkdown) {
+    code = extractMarkdownContent(code);
+  }
+
   const cellData = new vscode.NotebookCellData(
     isMarkdown ? vscode.NotebookCellKind.Markup : vscode.NotebookCellKind.Code,
     code,
-    "julia"
+    isMarkdown ? "markdown" : "julia"
   );
-
+  const results = notebookData.cell_results[plutoCellId] || null;
+  if (results !== null) {
+    // Add output if available
+    cellData.outputs = [formatCellOutput(results)];
+  }
   cellData.metadata = {
     pluto_cell_id: plutoCellId,
     ...cellInput.metadata,
@@ -56,7 +77,9 @@ export function parsePlutoNotebook(content: string): ParsedNotebook {
       pluto_version: "",
     };
   }
-  for (const cellId of notebookData.cell_order) {
+  const cell_order =
+    notebookData.cell_order || Object.keys(notebookData.cell_inputs);
+  for (const cellId of cell_order) {
     const cell = createVsCodeCellFromPlutoCell(notebookData, cellId);
     if (!cell) {
       continue;
@@ -86,10 +109,11 @@ export async function serializePlutoNotebook(
   for (const cell of cells) {
     const cellId = cell.metadata?.pluto_cell_id || generateCellId();
 
-    // Wrap markdown cells in md"""..."""
+    // Wrap markdown cells in md"""...""" and add #VSCODE-MARKDOWN marker
     let code = cell.value;
     if (cell.kind === vscode.NotebookCellKind.Markup) {
-      code = `md"""\n${cell.value}\n"""`;
+      // Add #VSCODE-MARKDOWN marker as first line, followed by md""" wrapper
+      code = `#VSCODE-MARKDOWN\nmd"""\n${cell.value}\n"""`;
     }
 
     cellInputs[cellId] = {
@@ -132,21 +156,39 @@ export async function serializePlutoNotebook(
 }
 
 /**
+ * Extract markdown content from md"""...""" wrapper
+ * Handles newlines, spaces, and all characters within the quotes
+ */
+export function extractMarkdownContent(code: string): string {
+  // Match triple-quote markdown: md"""CONTENT"""
+  // [\s\S] matches any character including newlines
+  const tripleQuoteMatch = code.match(/^\s*md"""([\s\S]*?)"""\s*$/);
+  if (tripleQuoteMatch) {
+    return tripleQuoteMatch[1];
+  }
+
+  // Match single-quote markdown: md"content"
+  const singleQuoteMatch = code.match(/^\s*md"([^"]*)"\s*$/);
+  if (singleQuoteMatch) {
+    return singleQuoteMatch[1];
+  }
+
+  // If no match, return as-is (might already be extracted)
+  return code;
+}
+
+/**
  * Detect if code is markdown
  */
 export function isMarkdownCell(code: string): boolean {
-  return /^\s*md"/.test(code);
+  return /^\s*#VSCODE-MARKDOWN/.test(code);
 }
 
 /**
  * Generate a UUID v4
  */
 export function generateCellId(): string {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+  return uuidv4();
 }
 
 /**
@@ -154,22 +196,4 @@ export function generateCellId(): string {
  */
 export function generateNotebookId(): string {
   return generateCellId();
-}
-
-/**
- * Validate Pluto notebook format
- */
-export function isValidPlutoNotebook(content: string): boolean {
-  return (
-    content.includes("### A Pluto.jl notebook ###") && content.includes("╔═╡")
-  );
-}
-
-/**
- * Extract cell count from notebook content
- */
-export function getCellCount(content: string): number {
-  const cellMarkerRegex = /# ╔═╡ [a-f0-9-]+\n/g;
-  const matches = content.match(cellMarkerRegex);
-  return matches ? matches.length : 0;
 }

@@ -395,11 +395,11 @@ export class PlutoMCPHttpServer {
                 {
                   cell_id: cell_id,
                   code: cellData.input.code,
-                  output: cellData.results.output,
-                  runtime: cellData.results.runtime,
-                  errored: cellData.results.errored,
-                  running: cellData.results.running,
-                  queued: cellData.results.queued,
+                  output: cellData.result.output,
+                  runtime: cellData.result.runtime,
+                  errored: cellData.result.errored,
+                  running: cellData.result.running,
+                  queued: cellData.result.queued,
                 },
                 null,
                 2

@@ -3,6 +3,21 @@ import { PlutoManager } from "./plutoManager.ts";
 import { NotebookData, UpdateEvent } from "@plutojl/rainbow";
 import { formatCellOutput } from "./serializer.ts";
 
+/**
+ * Prepare cell code for Pluto worker
+ * Wraps markdown cells in #VSCODE-MARKDOWN marker and md""" syntax
+ */
+function prepareCellCodeForWorker(cell: vscode.NotebookCell): string {
+  const code = cell.document.getText();
+
+  // If it's a markdown cell, wrap it properly for Pluto
+  if (cell.kind === vscode.NotebookCellKind.Markup) {
+    return `#VSCODE-MARKDOWN\nmd"""\n${code}\n"""`;
+  }
+
+  return code;
+}
+
 // --- START: Merged Interfaces ---
 
 /** A unique identifier for a cell, typically a UUID string. */
@@ -114,8 +129,14 @@ export class PlutoNotebookController {
         );
         await worker?.setBond(message.name, message.value);
         this.outputChannel.appendLine(
-          `[RENDERER MESSAGE] Bond set${message.name}=${message.value}!`
+          `[RENDERER MESSAGE] Bond set${message.name}=${message.value} for ${editor.notebook.uri}!`
         );
+
+        this.sendMessageToRenderer(editor.notebook, {
+          type: "bond",
+          content: "ok",
+          cell_id: message.cell_id,
+        });
         break;
       default:
         this.outputChannel.appendLine(`[UNKNOWN MESSAGE TYPE] ${message.type}`);
@@ -187,26 +208,67 @@ export class PlutoNotebookController {
     const cellId = path[1] as CellId;
 
     const currentCellState = fullNotebookState.cell_results[cellId];
+
+    const body = currentCellState.output?.body;
+    try {
+      // the state (which comes from `execution.replaceOutput([formatCellOutput])`)) is
+      // serialized differently than postMessage (which JSONifies stuff)
+      // Here we adjust for the case of binary data (e.g. svg/other images)
+      // which leave the websocket as UintArrays and get JSON.stringified to {0: byte...}
+      // TODO: this probably needs to happen at @plutojl/rainbow (which would then guarantee serializability)
+      // Since this only happens once per image, it's probably _fine_ --pg
+      if (
+        currentCellState.output.mime &&
+        body &&
+        typeof body === "object" &&
+        (body instanceof Uint8Array || body instanceof ArrayBuffer)
+      ) {
+        currentCellState.output.body = new TextDecoder().decode(
+          new Uint8Array(body)
+        );
+      }
+    } catch (err) {
+      console.error(`Serialization of ArrayBuffer in a string failed`, {
+        err,
+        body,
+        type: typeof body,
+        cellId,
+      });
+      // TextDecoder returns type error if body isn't an array buffer of sorts
+    }
+
+    // Optimistically send data. May be ignored.
+    // If not ignored, this makes sure logs, stdout and progress
+    // is communicated
+    this.sendMessageToRenderer(notebook, {
+      type: "setState",
+      state: currentCellState,
+      cell_id: currentCellState.cell_id,
+    });
+
     const segment2 = path[2];
 
     // 1. Update Cell Execution Status (queued, running)
     const isStarting = patch.value === true && segment2 === "running";
-
+    if (segment2 === "running") {
+      this.plutoManager.emitCellUpdated(notebook.uri.fsPath, cellId);
+    }
     if (isStarting) {
       // Start execution
-      this.startExecution(cellId, notebook);
+      const execution = this.startExecution(cellId, notebook);
+      execution.replaceOutput([formatCellOutput(currentCellState)]);
     }
 
     // 2. Update Cell Output (only if an execution object exists)
     if (segment2 === "output") {
       // Handle final output/result update
       const execution = this.startExecution(cellId, notebook);
-      if (currentCellState?.output) {
-        execution.replaceOutput([formatCellOutput(currentCellState.output)]);
-        this.outputChannel.appendLine(
-          `[OUTPUT] Cell ${cellId} output updated.`
-        );
-      }
+      execution.replaceOutput([formatCellOutput(currentCellState)]);
+
+      this.outputChannel.appendLine(
+        `[OUTPUT] Cell ${cellId} for notebook ${notebook.uri} output updated.`
+      );
+
       execution.end(true, Date.now());
       this.activeExecutions.delete(cellId);
       this.outputChannel.appendLine(`[EXEC END] Cell ${cellId} finished.`);
@@ -418,6 +480,8 @@ export class PlutoNotebookController {
 
             // Subscribe to updates from this worker
             worker.onUpdate(this.onPlutoNotebookUpdate(notebook));
+
+            // Fetch existing cell results from Pluto server
           }
         } catch (error) {
           const errorMessage =
@@ -451,7 +515,8 @@ export class PlutoNotebookController {
     }
     for (const addedCell of addedCells) {
       try {
-        const code = addedCell.document.getText();
+        // Prepare code - wrap markdown cells properly
+        const code = prepareCellCodeForWorker(addedCell);
         const cellIndex = notebook.getCells().indexOf(addedCell);
 
         this.outputChannel.appendLine(`Adding new cell at index ${cellIndex}`);
@@ -600,7 +665,8 @@ export class PlutoNotebookController {
       }
 
       // Execute the cell. This sends the message to the Pluto kernel.
-      const code = cell.document.getText();
+      // For markdown cells, wrap in proper format
+      const code = prepareCellCodeForWorker(cell);
 
       // The worker will handle the execution and stream updates back via onNotebookUpdate.
       await this.plutoManager.executeCell(worker, cellId, code);
