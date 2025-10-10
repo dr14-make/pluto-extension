@@ -1,6 +1,11 @@
 import * as vscode from "vscode";
 import { PlutoManager } from "../plutoManager.ts";
-import type { NotebookData, Worker } from "@plutojl/rainbow";
+import type {
+  CellDependencyData,
+  CellDependencyGraph,
+  NotebookData,
+  Worker,
+} from "@plutojl/rainbow";
 
 /**
  * Tree item types
@@ -96,30 +101,60 @@ class PlutoCellTreeItem
   constructor(
     public readonly notebookPath: string,
     public readonly cellId: string,
-    public readonly cellData: ReturnType<Worker["getSnippet"]>
+    public readonly cellData: ReturnType<Worker["getSnippet"]>,
+    public readonly dependencies: CellDependencyData
   ) {
-    super(cellId, vscode.TreeItemCollapsibleState.None);
-
-    const cellResults = cellData?.result;
+    const cellResult = cellData?.result;
     const code = cellData?.input?.code || "";
+    const keys = Object.keys(dependencies.downstream_cells_map ?? {});
+    const upstream = new Set(
+      Object.values(dependencies.upstream_cells_map)
+        .flatMap((x) => x)
+        .filter((x) => x !== cellId)
+    );
+    const treeItemName = keys.length
+      ? keys.join(", ")
+      : code === ""
+      ? "(empty)"
+      : cellResult?.errored || cellResult?.queued || cellResult?.running
+      ? ""
+      : cellResult?.output?.mime
+      ? "(result)"
+      : "";
+    const mimeIcon: Record<string, string> = {
+      "text/plain": "📰",
+      "text/html": "📊",
+      "text/svg": "🌅",
+      "image/png": "🌅",
+      "application/vnd.pluto.stacktrace+object": "🤯",
+      "application/vnd.pluto.tree+object": "#️⃣",
+      "": "⚪",
+    };
+    const mime = cellData?.result.output.mime;
+    super(
+      `${mimeIcon[mime ?? ""] ?? "⚪"}${" · ".repeat(
+        upstream.size
+      )}${treeItemName}`,
+      vscode.TreeItemCollapsibleState.None
+    );
 
     // Assign icon directly based on cell status
-    if (cellResults?.running) {
+    if (cellResult?.running) {
       this.iconPath = new vscode.ThemeIcon(
         "rocket",
         new vscode.ThemeColor("charts.blue")
       );
-    } else if (cellResults?.queued) {
+    } else if (cellResult?.queued) {
       this.iconPath = new vscode.ThemeIcon(
         "clock",
         new vscode.ThemeColor("charts.yellow")
       );
-    } else if (cellResults?.errored) {
+    } else if (cellResult?.errored) {
       this.iconPath = new vscode.ThemeIcon(
         "error",
         new vscode.ThemeColor("problemsErrorIcon.foreground")
       );
-    } else if (cellResults?.output) {
+    } else if (cellResult?.output) {
       this.iconPath = new vscode.ThemeIcon(
         "pass",
         new vscode.ThemeColor("charts.green")
@@ -255,7 +290,13 @@ export class NotebooksTreeDataProvider
           if (!cellData) {
             continue;
           }
-          const item = new PlutoCellTreeItem(notebookPath, cellId, cellData);
+          const cellDependencies = notebookData.cell_dependencies[cellId];
+          const item = new PlutoCellTreeItem(
+            notebookPath,
+            cellId,
+            cellData,
+            cellDependencies
+          );
           cells.push(item);
         } catch (cellError) {
           console.error(
