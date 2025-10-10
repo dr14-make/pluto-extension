@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { CellResultData } from "@plutojl/rainbow";
+import type { CellResultData } from "@plutojl/rainbow";
 
 /**
  * Manages webview panels for displaying terminal output with rich content

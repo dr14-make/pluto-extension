@@ -1,5 +1,6 @@
 import "@plutojl/rainbow/node-polyfill";
-import { CellResultData, Host, Worker } from "@plutojl/rainbow";
+import type { CellResultData, Worker } from "@plutojl/rainbow";
+import { Host } from "@plutojl/rainbow";
 import { readFile } from "fs/promises";
 import { PlutoServerTaskManager } from "./plutoServerTask.js";
 import { EventEmitter } from "events";

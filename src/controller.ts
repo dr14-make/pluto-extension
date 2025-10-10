@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { PlutoManager } from "./plutoManager.ts";
-import { NotebookData, UpdateEvent } from "@plutojl/rainbow";
+import type { PlutoManager } from "./plutoManager.ts";
+import type { NotebookData, UpdateEvent } from "@plutojl/rainbow";
 import { formatCellOutput } from "./serializer.ts";
 
 /**

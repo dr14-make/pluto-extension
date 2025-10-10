@@ -1,10 +1,10 @@
 import "@plutojl/rainbow/node-polyfill";
 import express from "express";
 import type { Express, Request, Response } from "express";
-import { Server as HttpServer } from "http";
+import type { Server as HttpServer } from "http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import { PlutoManager } from "./plutoManager.ts";
+import type { PlutoManager } from "./plutoManager.ts";
 import { z } from "zod";
 // @ts-ignore - esbuild will load this as text
 import PlutoGuide from "./PLUTO_GUIDE.md";

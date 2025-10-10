@@ -24,6 +24,14 @@ export default [
           format: ["camelCase", "PascalCase"],
         },
       ],
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        {
+          prefer: "type-imports",
+          disallowTypeAnnotations: true,
+          fixStyle: "separate-type-imports",
+        },
+      ],
 
       curly: "warn",
       eqeqeq: "warn",

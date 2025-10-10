@@ -3,7 +3,7 @@ import {
   parsePlutoNotebook,
   serializePlutoNotebook,
 } from "./plutoSerializer.ts";
-import { CellResultData } from "@plutojl/rainbow";
+import type { CellResultData } from "@plutojl/rainbow";
 
 export function formatCellOutput(
   output: CellResultData

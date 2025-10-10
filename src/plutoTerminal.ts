@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { PlutoManager } from "./plutoManager.ts";
+import type { PlutoManager } from "./plutoManager.ts";
 import { TerminalOutputWebviewProvider } from "./terminalOutputWebview.ts";
 import {
   getExampleCommand,

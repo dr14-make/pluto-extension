@@ -1,4 +1,4 @@
-import { CellInputData, NotebookData } from "@plutojl/rainbow";
+import type { CellInputData, NotebookData } from "@plutojl/rainbow";
 import { parse, serialize } from "./rainbowAdapter.ts";
 import * as vscode from "vscode";
 import { formatCellOutput } from "./serializer.ts";
