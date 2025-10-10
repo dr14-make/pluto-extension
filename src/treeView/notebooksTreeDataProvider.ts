@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { PlutoManager } from "../plutoManager.ts";
-import { NotebookData } from "@plutojl/rainbow";
+import type { NotebookData, Worker } from "@plutojl/rainbow";
 
 /**
  * Tree item types
@@ -11,38 +11,131 @@ enum TreeItemType {
 }
 
 /**
- * Tree item for notebooks and cells
+ * Base tree item interface
  */
-class NotebookTreeItem extends vscode.TreeItem {
-  constructor(
-    public readonly label: string,
-    public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-    public readonly type: TreeItemType,
-    public readonly notebookPath?: string,
-    public readonly cellId?: string,
-    public readonly cellCode?: string
-  ) {
-    super(label, collapsibleState);
+interface NotebookTreeItemBase extends vscode.TreeItem {
+  readonly type: TreeItemType;
+  readonly notebookPath: string;
+}
 
-    if (type === TreeItemType.Notebook) {
-      this.contextValue = "plutoNotebook";
-      this.iconPath = new vscode.ThemeIcon("notebook");
-      this.tooltip = notebookPath;
-      this.command = {
-        command: "pluto-notebook.openNotebookFromTree",
-        title: "Open Notebook",
-        arguments: [notebookPath],
-      };
+/**
+ * Tree item for notebook
+ */
+class PlutoNotebookTreeItem
+  extends vscode.TreeItem
+  implements NotebookTreeItemBase
+{
+  public readonly type = TreeItemType.Notebook;
+
+  constructor(
+    public readonly notebookPath: string,
+    public readonly plutoNotebook: NotebookData | undefined,
+    public readonly isConnected: boolean,
+    public readonly error?: Error
+  ) {
+    super(
+      notebookPath.split("/").pop() || notebookPath,
+      vscode.TreeItemCollapsibleState.Expanded
+    );
+    const basename = notebookPath.split("/").pop() || notebookPath;
+
+    // Determine status
+    let status = "";
+    if (error) {
+      status = " (error)";
+    } else if (!isConnected) {
+      status = " (disconnected)";
+    } else if (plutoNotebook) {
+      const processStatus = plutoNotebook.process_status || "";
+      status = processStatus ? ` (${processStatus})` : " (connected)";
     } else {
-      this.contextValue = "plutoCell";
-      this.iconPath = new vscode.ThemeIcon("symbol-field");
-      this.tooltip = cellCode ? `${cellCode.substring(0, 100)}...` : cellId;
-      this.command = {
-        command: "pluto-notebook.focusCellFromTree",
-        title: "Focus Cell",
-        arguments: [notebookPath, cellId],
-      };
+      status = " (unknown)";
     }
+
+    this.label = `${basename}${status}`;
+
+    // Assign icon directly based on status
+    if (error) {
+      this.iconPath = new vscode.ThemeIcon(
+        "notebook",
+        new vscode.ThemeColor("problemsErrorIcon.foreground")
+      );
+    } else if (!isConnected) {
+      this.iconPath = new vscode.ThemeIcon(
+        "notebook",
+        new vscode.ThemeColor("problemsWarningIcon.foreground")
+      );
+    } else if (plutoNotebook) {
+      this.iconPath = new vscode.ThemeIcon(
+        "notebook",
+        new vscode.ThemeColor("charts.green")
+      );
+    } else {
+      this.iconPath = new vscode.ThemeIcon("notebook");
+    }
+
+    this.contextValue = "plutoNotebook";
+    this.tooltip = notebookPath;
+    this.command = {
+      command: "pluto-notebook.openNotebookFromTree",
+      title: "Open Notebook",
+      arguments: [notebookPath],
+    };
+  }
+}
+
+/**
+ * Tree item for cell
+ */
+class PlutoCellTreeItem
+  extends vscode.TreeItem
+  implements NotebookTreeItemBase
+{
+  public readonly type = TreeItemType.Cell;
+
+  constructor(
+    public readonly notebookPath: string,
+    public readonly cellId: string,
+    public readonly cellData: ReturnType<Worker["getSnippet"]>
+  ) {
+    super(cellId, vscode.TreeItemCollapsibleState.None);
+
+    // TODO Panagiotis to fix
+    const cellResults = (cellData as any)?.result;
+    const code = cellData?.input?.code || "";
+
+    // Assign icon directly based on cell status
+    if (cellResults?.running) {
+      this.iconPath = new vscode.ThemeIcon(
+        "rocket",
+        new vscode.ThemeColor("charts.blue")
+      );
+    } else if (cellResults?.queued) {
+      this.iconPath = new vscode.ThemeIcon(
+        "clock",
+        new vscode.ThemeColor("charts.yellow")
+      );
+    } else if (cellResults?.errored) {
+      this.iconPath = new vscode.ThemeIcon(
+        "error",
+        new vscode.ThemeColor("problemsErrorIcon.foreground")
+      );
+    } else if (cellResults?.output) {
+      this.iconPath = new vscode.ThemeIcon(
+        "pass",
+        new vscode.ThemeColor("charts.green")
+      );
+    } else {
+      this.iconPath = new vscode.ThemeIcon("circle-outline");
+    }
+
+    this.contextValue = "plutoCell";
+    this.tooltip = code ? `${code.substring(0, 100)}...` : cellId;
+    this.command = {
+      command: "pluto-notebook.focusCellFromTree",
+      title: "Focus Cell",
+      arguments: [notebookPath, cellId],
+    };
   }
 }
 
@@ -50,13 +143,13 @@ class NotebookTreeItem extends vscode.TreeItem {
  * Tree data provider for Pluto notebooks
  */
 export class NotebooksTreeDataProvider
-  implements vscode.TreeDataProvider<NotebookTreeItem>
+  implements vscode.TreeDataProvider<NotebookTreeItemBase>
 {
   private _onDidChangeTreeData: vscode.EventEmitter<
-    NotebookTreeItem | undefined | null | void
-  > = new vscode.EventEmitter<NotebookTreeItem | undefined | null | void>();
+    NotebookTreeItemBase | undefined | null | void
+  > = new vscode.EventEmitter<NotebookTreeItemBase | undefined | null | void>();
   readonly onDidChangeTreeData: vscode.Event<
-    NotebookTreeItem | undefined | null | void
+    NotebookTreeItemBase | undefined | null | void
   > = this._onDidChangeTreeData.event;
 
   /**
@@ -78,20 +171,22 @@ export class NotebooksTreeDataProvider
   /**
    * Get tree item
    */
-  getTreeItem(element: NotebookTreeItem): vscode.TreeItem {
+  getTreeItem(element: NotebookTreeItemBase): vscode.TreeItem {
     return element;
   }
 
   /**
    * Get children for tree item
    */
-  async getChildren(element?: NotebookTreeItem): Promise<NotebookTreeItem[]> {
+  async getChildren(
+    element?: NotebookTreeItemBase
+  ): Promise<NotebookTreeItemBase[]> {
     if (!element) {
       // Root level - show all open notebooks
       return this.getNotebooks();
     } else if (element.type === TreeItemType.Notebook) {
       // Show cells for this notebook
-      return this.getCells(element.notebookPath!);
+      return this.getCells(element.notebookPath);
     }
     return [];
   }
@@ -99,7 +194,7 @@ export class NotebooksTreeDataProvider
   /**
    * Get all open notebooks
    */
-  private async getNotebooks(): Promise<NotebookTreeItem[]> {
+  private async getNotebooks(): Promise<PlutoNotebookTreeItem[]> {
     const notebooks = this.plutoManager.getOpenNotebooks();
 
     console.log(`[TreeView] Found ${notebooks.length} open notebooks`);
@@ -110,32 +205,27 @@ export class NotebooksTreeDataProvider
 
     return Promise.all(
       notebooks.map(async (notebook) => {
-        const basename = notebook.path.split("/").pop() || notebook.path;
+        let plutoNotebook: NotebookData | undefined;
+        let error: Error | undefined;
+        const isConnected = this.plutoManager.isConnected();
 
-        // Determine notebook status icon
-        let status = "$(circle-outline)";
         try {
-          // Check if notebook is connected by trying to get worker
-          const worker = await this.plutoManager.getWorker(notebook.path);
-          if (!worker) {
-            status = "$(debug-disconnect)"; // Not connected
+          if (isConnected) {
+            const worker = await this.plutoManager.getWorker(notebook.path);
+            plutoNotebook = worker?.getState();
           }
-          const plutoNotebook: NotebookData | undefined = worker?.getState();
-          status = plutoNotebook?.process_status || "";
-        } catch (error) {
-          status = "Error";
+        } catch (err) {
+          error = err instanceof Error ? err : new Error(String(err));
         }
 
-        const label = `${basename}-${status}`;
-
-        const item = new NotebookTreeItem(
-          label,
-          vscode.TreeItemCollapsibleState.Expanded,
-          TreeItemType.Notebook,
-          notebook.path
+        const item = new PlutoNotebookTreeItem(
+          notebook.path,
+          plutoNotebook,
+          isConnected,
+          error
         );
 
-        console.log(`[TreeView] Created notebook item: ${label}`);
+        console.log(`[TreeView] Created notebook item: ${item.label}`);
         return item;
       })
     );
@@ -144,7 +234,7 @@ export class NotebooksTreeDataProvider
   /**
    * Get all cells for a notebook
    */
-  private async getCells(notebookPath: string): Promise<NotebookTreeItem[]> {
+  private async getCells(notebookPath: string): Promise<PlutoCellTreeItem[]> {
     try {
       console.log(`[TreeView] Getting cells for ${notebookPath}`);
 
@@ -168,7 +258,7 @@ export class NotebooksTreeDataProvider
       }
 
       console.log(`[TreeView] Found ${cellOrder.length} cells`);
-      const cells: NotebookTreeItem[] = [];
+      const cells: PlutoCellTreeItem[] = [];
 
       for (const cellId of cellOrder) {
         try {
@@ -178,39 +268,10 @@ export class NotebooksTreeDataProvider
             continue;
           }
 
-          const cellResults = cellData.results;
+          const item = new PlutoCellTreeItem(notebookPath, cellId, cellData);
+          cells.push(item);
 
-          // Determine cell status icon
-          let icon = "$(circle-outline)";
-
-          if (cellResults.running) {
-            icon = "$(sync~spin)"; // Running
-          } else if (cellResults.queued) {
-            icon = "$(watch)"; // Queued
-          } else if (cellResults.errored) {
-            icon = "$(error)"; // Error
-          } else if (cellResults.output) {
-            icon = "$(pass)"; // Success
-          }
-
-          // Get cell code for tooltip
-          const code = cellData.input?.code || "";
-
-          // Create cell label
-          const label = `${icon} ${cellId}`;
-
-          cells.push(
-            new NotebookTreeItem(
-              label,
-              vscode.TreeItemCollapsibleState.None,
-              TreeItemType.Cell,
-              notebookPath,
-              cellId,
-              code
-            )
-          );
-
-          console.log(`[TreeView] Added cell: ${label}`);
+          console.log(`[TreeView] Added cell: ${cellId}`);
         } catch (cellError) {
           console.error(
             `[TreeView] Error processing cell ${cellId}:`,
