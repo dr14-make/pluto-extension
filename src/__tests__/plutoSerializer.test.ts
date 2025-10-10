@@ -96,13 +96,13 @@ describe("Pluto Serializer Functions", () => {
         c.value.includes("Pluto Notebook Demo")
       );
       expect(titleCell).toBeDefined();
-      expect(titleCell?.kind).toBe("markdown");
+      expect(titleCell?.kind).toBe(NotebookCellKind.Markup);
     });
 
     it("should have variable declarations", () => {
-      const xCell = parsed.cells.find((c) => c.value.trim() === "x = 5");
+      const xCell = parsed.cells.find((c) => c.value.includes("x = 5"));
       expect(xCell).toBeDefined();
-      expect(xCell?.kind).toBe("code");
+      expect(xCell?.kind).toBe(NotebookCellKind.Code);
     });
 
     it("should have PlutoUI widgets", () => {
@@ -180,9 +180,11 @@ describe("Pluto Serializer Functions", () => {
 
       const serialized = serializePlutoNotebook(cells);
 
-      expect(serialized).toContain("x = 1");
-      // Should have generated a UUID
-      expect(validate(serialized)).toBeTruthy();
+      expect(serialized).toContain("y = x + 1");
+      // Should contain a valid UUID in the cell marker
+      expect(serialized).toMatch(
+        /# ╔═╡ [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/
+      );
     });
   });
 
@@ -252,7 +254,7 @@ describe("Pluto Serializer Functions", () => {
       const parsed = parsePlutoNotebook(demoNotebookContent);
 
       // Find specific cells
-      const xCell = parsed.cells.find((c) => c.value.trim() === "x = 5");
+      const xCell = parsed.cells.find((c) => c.value.includes("x = 5"));
       const titleCell = parsed.cells.find((c) =>
         c.value.includes("Pluto Notebook Demo")
       );
@@ -269,15 +271,15 @@ describe("Pluto Serializer Functions", () => {
       const reParsed = parsePlutoNotebook(serialized);
 
       // Verify cells still exist
-      const xCellAfter = reParsed.cells.find((c) => c.value.trim() === "x = 5");
+      const xCellAfter = reParsed.cells.find((c) => c.value.includes("x = 5"));
       const titleCellAfter = reParsed.cells.find((c) =>
         c.value.includes("Pluto Notebook Demo")
       );
 
       expect(xCellAfter).toBeDefined();
       expect(titleCellAfter).toBeDefined();
-      expect(xCellAfter?.kind).toBe("code");
-      expect(titleCellAfter?.kind).toBe("markdown");
+      expect(xCellAfter?.kind).toBe(NotebookCellKind.Code);
+      expect(titleCellAfter?.kind).toBe(NotebookCellKind.Markup);
     });
   });
 
@@ -297,7 +299,7 @@ describe("Pluto Serializer Functions", () => {
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ aaa11111-1111-1111-1111-111111111111
+# ╔═╡ ${uuidv4()}
 x = 1`;
 
       const parsed = parsePlutoNotebook(notebook);

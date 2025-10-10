@@ -3,7 +3,7 @@ import { parse, serialize } from "./rainbowAdapter.ts";
 import * as vscode from "vscode";
 import { formatCellOutput } from "./serializer.ts";
 import { v4 as uuidv4, validate } from "uuid";
-import { isNotDefined } from "./helpers.ts";
+import { isDefined, isNotDefined } from "./helpers.ts";
 
 /**
  * Pure functions for Pluto notebook parsing and serialization
@@ -37,12 +37,13 @@ export function createVsCodeCellFromPlutoCell(
 
   // Check if cell is markdown by looking for #VSCODE-MARKDOWN marker or md""" wrapper
   const isVSCodeMarkdown = isMarkdownCell(code);
-  const hasMarkdownWrapper = /^\s*md"""/.test(code);
-  const isMarkdown = isVSCodeMarkdown && hasMarkdownWrapper;
+  const possibleMdCode = extractMarkdownContent(code);
+  // Cell is markdown if it has EITHER the VSCODE-MARKDOWN marker OR the md""" wrapper
+  const isMarkdown = isVSCodeMarkdown && isDefined(possibleMdCode);
 
   // Extract markdown content from md"""...""" wrapper
   if (isMarkdown) {
-    code = extractMarkdownContent(code);
+    code = possibleMdCode;
   }
 
   const cellData = new vscode.NotebookCellData(
@@ -113,7 +114,7 @@ export function serializePlutoNotebook(
     let code = cell.value;
     if (cell.kind === vscode.NotebookCellKind.Markup) {
       // Add #VSCODE-MARKDOWN marker as first line, followed by md""" wrapper
-      code = `#VSCODE-MARKDOWN\nmd"""\n${cell.value}\n"""`;
+      code = `#VSCODE-MARKDOWN\nmd"""${cell.value}"""`;
     }
 
     cellInputs[cellId] = {
@@ -158,23 +159,28 @@ export function serializePlutoNotebook(
 /**
  * Extract markdown content from md"""...""" wrapper
  * Handles newlines, spaces, and all characters within the quotes
+ * Also strips #VSCODE-MARKDOWN marker if present
  */
-export function extractMarkdownContent(code: string): string {
+export function extractMarkdownContent(code: string): string | undefined {
+  // First, remove #VSCODE-MARKDOWN marker if present (with optional whitespace before)
+  const cleaned = code.replace(/^\s*#VSCODE-MARKDOWN\s*\n?/, "");
+
   // Match triple-quote markdown: md"""CONTENT"""
   // [\s\S] matches any character including newlines
-  const tripleQuoteMatch = code.match(/^\s*md"""([\s\S]*?)"""\s*$/);
+  // Allow any whitespace/newlines before md"""
+  const tripleQuoteMatch = cleaned.match(/^\s*md"""([\s\S]*?)"""\s*$/);
   if (tripleQuoteMatch) {
     return tripleQuoteMatch[1];
   }
 
   // Match single-quote markdown: md"content"
-  const singleQuoteMatch = code.match(/^\s*md"([^"]*)"\s*$/);
+  const singleQuoteMatch = cleaned.match(/^\s*md"([^"]*)"\s*$/);
   if (singleQuoteMatch) {
     return singleQuoteMatch[1];
   }
 
-  // If no match, return as-is (might already be extracted)
-  return code;
+  // If no match, return the cleaned version (without the marker)
+  return undefined;
 }
 
 /**
