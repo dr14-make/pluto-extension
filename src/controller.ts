@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import type { PlutoManager } from "./plutoManager.ts";
 import type { NotebookData, UpdateEvent } from "@plutojl/rainbow";
 import { formatCellOutput } from "./serializer.ts";
-import { isDefined, isEmptyString } from "./helpers.ts";
+import { isDefined, isNotDefined, isEmptyString } from "./helpers.ts";
 
 /**
  * Prepare cell code for Pluto worker
@@ -657,7 +657,7 @@ export class PlutoNotebookController {
     // If an execution is already active, reuse it, otherwise create a placeholder.
 
     const cellId = cell.metadata?.pluto_cell_id as string;
-    if (isDefined(cellId) || isEmptyString(cellId)) {
+    if (isNotDefined(cellId) || isEmptyString(cellId)) {
       vscode.window.showErrorMessage(`Cell missing Pluto cell ID`);
       return;
     }

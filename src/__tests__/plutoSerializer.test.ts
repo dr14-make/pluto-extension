@@ -7,7 +7,7 @@ import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { type NotebookCellData, NotebookCellKind } from "vscode";
-import { v4 as uuidv4, validate } from "uuid";
+import { v4 as uuidv4 } from "uuid";
 
 // ES module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
