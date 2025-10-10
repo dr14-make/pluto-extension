@@ -1,4 +1,5 @@
 import "@plutojl/rainbow/node-polyfill";
+import type { PlutoManagerLogger } from "../plutoManager.ts";
 import { PlutoManager } from "../plutoManager.ts";
 
 /**
@@ -9,17 +10,10 @@ let sharedPlutoManager: PlutoManager | undefined;
 
 export function getSharedPlutoManager(
   port: number,
-  outputChannel: {
-    appendLine: (msg: string) => void;
-    showWarningMessage<T extends string>(
-      message: string,
-      ...items: T[]
-    ): Thenable<T | undefined>;
-  }
+  logger: PlutoManagerLogger,
+  serverUrl?: string
 ): PlutoManager {
-  if (!sharedPlutoManager) {
-    sharedPlutoManager = new PlutoManager(port, outputChannel);
-  }
+  sharedPlutoManager ??= new PlutoManager(port, logger, serverUrl);
   return sharedPlutoManager;
 }
 

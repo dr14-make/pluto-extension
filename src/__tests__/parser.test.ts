@@ -48,16 +48,16 @@ y = x^2
       const result = parse(notebook);
 
       expect(result.cell_order).toContain(
-        "aaa11111-2222-3333-4444-555566667777",
+        "aaa11111-2222-3333-4444-555566667777"
       );
       expect(result.cell_order).toContain(
-        "bbb22222-3333-4444-5555-666677778888",
+        "bbb22222-3333-4444-5555-666677778888"
       );
       expect(
-        result.cell_inputs["aaa11111-2222-3333-4444-555566667777"],
+        result.cell_inputs["aaa11111-2222-3333-4444-555566667777"]
       ).toBeDefined();
       expect(
-        result.cell_inputs["bbb22222-3333-4444-5555-666677778888"],
+        result.cell_inputs["bbb22222-3333-4444-5555-666677778888"]
       ).toBeDefined();
     });
 
@@ -81,7 +81,7 @@ This is markdown
       const result = parse(notebook);
 
       expect(result.cell_order).toContain(
-        "md111111-2222-3333-4444-555566667777",
+        "md111111-2222-3333-4444-555566667777"
       );
       const cell = result.cell_inputs["md111111-2222-3333-4444-555566667777"];
       expect(cell).toBeDefined();
@@ -139,13 +139,13 @@ end
       const result = parse(notebook);
 
       expect(
-        result.cell_inputs["ddd44444-4444-4444-4444-444444444444"],
+        result.cell_inputs["ddd44444-4444-4444-4444-444444444444"]
       ).toBeDefined();
       expect(
-        result.cell_inputs["ddd44444-4444-4444-4444-444444444444"].code,
+        result.cell_inputs["ddd44444-4444-4444-4444-444444444444"].code
       ).toContain("begin");
       expect(
-        result.cell_inputs["ddd44444-4444-4444-4444-444444444444"].code,
+        result.cell_inputs["ddd44444-4444-4444-4444-444444444444"].code
       ).toContain("end");
     });
 
@@ -178,10 +178,10 @@ Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 
       // Regular cells should be parsed
       expect(
-        result.cell_inputs["abc12345-1234-5678-9abc-def012345678"],
+        result.cell_inputs["abc12345-1234-5678-9abc-def012345678"]
       ).toBeDefined();
       expect(
-        result.cell_inputs["def67890-5678-9abc-def0-123456789abc"],
+        result.cell_inputs["def67890-5678-9abc-def0-123456789abc"]
       ).toBeDefined();
 
       // Parser should handle the notebook without errors
@@ -206,7 +206,7 @@ using InteractiveUtils
       const result = parse(notebook);
 
       expect(result.cell_order).toContain(
-        "eee55555-5555-5555-5555-555555555555",
+        "eee55555-5555-5555-5555-555555555555"
       );
     });
   });
@@ -308,10 +308,10 @@ y = x * 2
 
       expect(parsed.cell_order).toHaveLength(2);
       expect(
-        parsed.cell_inputs["fff66666-6666-6666-6666-666666666666"],
+        parsed.cell_inputs["fff66666-6666-6666-6666-666666666666"]
       ).toBeDefined();
       expect(
-        parsed.cell_inputs["ggg77777-7777-7777-7777-777777777777"],
+        parsed.cell_inputs["ggg77777-7777-7777-7777-777777777777"]
       ).toBeDefined();
 
       // Serialize
@@ -325,7 +325,7 @@ y = x * 2
 
       expect(reParsed.cell_order).toEqual(parsed.cell_order);
       expect(Object.keys(reParsed.cell_inputs)).toEqual(
-        Object.keys(parsed.cell_inputs),
+        Object.keys(parsed.cell_inputs)
       );
     });
 

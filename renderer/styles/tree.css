@@ -1,0 +1,570 @@
+/* Vendored from Pluto.jl/frontend/treeview.css */
+/* Adapted for VSCode theme variables */
+pluto-tree,
+pluto-tree-pair {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.75rem;
+}
+pluto-tree {
+  color: var(--vscode-editor-foreground, var(--vscode-foreground));
+  white-space: pre;
+  cursor: pointer;
+}
+
+pluto-tree,
+pluto-tree-items {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+pluto-tree.collapsed,
+pluto-tree.collapsed pluto-tree,
+pluto-tree.collapsed pluto-tree-items {
+  flex-direction: row;
+  align-items: baseline;
+}
+
+pluto-tree-items {
+  cursor: auto;
+}
+
+pluto-tree-prefix {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: baseline;
+}
+
+pluto-tree > pluto-tree-prefix::before {
+  display: inline-block;
+  position: relative;
+  content: "";
+  background-size: 100%;
+  height: 1em;
+  width: 1em;
+  bottom: -2px;
+  opacity: 0.5;
+  cursor: pointer;
+  background-image: url("https://cdn.jsdelivr.net/gh/ionic-team/ionicons@5.5.1/src/svg/caret-down-outline.svg");
+  /* Icons will adapt to theme through opacity */
+}
+
+pluto-tree.collapsed pluto-tree > pluto-tree-prefix::before {
+  display: none;
+}
+
+pluto-tree.collapsed > pluto-tree-prefix::before {
+  background-image: url("https://cdn.jsdelivr.net/gh/ionic-team/ionicons@5.5.1/src/svg/caret-forward-outline.svg");
+}
+
+pluto-tree p-r > p-v {
+  display: inline-flex;
+  color: var(--vscode-editor-foreground, var(--vscode-foreground));
+}
+
+pluto-tree.collapsed pluto-tree-items.Array > p-r > p-k,
+pluto-tree.collapsed pluto-tree-items.Set > p-r > p-k,
+pluto-tree.collapsed pluto-tree-items.Tuple > p-r > p-k,
+pluto-tree.collapsed pluto-tree-items.struct > p-r > p-k {
+  display: none;
+}
+
+pluto-tree > pluto-tree-prefix > .long {
+  display: block;
+}
+pluto-tree > pluto-tree-prefix > .short {
+  display: none;
+}
+pluto-tree.collapsed > pluto-tree-prefix > .long {
+  display: none;
+}
+pluto-tree.collapsed > pluto-tree-prefix > .short {
+  display: block;
+}
+
+/*  */
+
+pluto-tree p-r {
+  margin-left: 3em;
+}
+pluto-tree.collapsed p-r {
+  margin-left: 0.5em;
+}
+
+pluto-tree.collapsed p-r:first-child {
+  margin-left: 0;
+}
+
+pluto-tree pluto-tree-items.Array > p-r > p-k,
+pluto-tree pluto-tree-items.Set > p-r > p-k,
+pluto-tree pluto-tree-items.Tuple > p-r > p-k {
+  margin-right: 1em;
+  opacity: 0.5;
+  user-select: none;
+}
+
+/*  */
+
+pluto-tree.Array > pluto-tree-prefix::after {
+  content: "[";
+}
+
+pluto-tree pluto-tree-items.Array::after {
+  content: "]";
+}
+
+pluto-tree.Set > pluto-tree-prefix::after {
+  content: "([";
+}
+
+pluto-tree pluto-tree-items.Set::after {
+  content: "])";
+}
+
+pluto-tree.Tuple > pluto-tree-prefix::after,
+pluto-tree.Dict > pluto-tree-prefix::after,
+pluto-tree.NamedTuple > pluto-tree-prefix::after,
+pluto-tree.struct > pluto-tree-prefix::after {
+  content: "(";
+}
+
+pluto-tree pluto-tree-items.Tuple::after,
+pluto-tree pluto-tree-items.Dict::after,
+pluto-tree pluto-tree-items.NamedTuple::after,
+pluto-tree pluto-tree-items.struct::after {
+  content: ")";
+}
+
+/*  */
+
+pluto-tree pluto-tree-items.Array > p-r > p-k::after,
+pluto-tree pluto-tree-items.Set > p-r > p-k::after,
+pluto-tree pluto-tree-items.Tuple > p-r > p-k::after {
+  content: ":";
+}
+
+pluto-tree-pair > p-r > p-k::after,
+pluto-tree pluto-tree-items.Dict > p-r > p-k::after {
+  content: " => ";
+}
+
+pluto-tree pluto-tree-items.NamedTuple > p-r > p-k::after,
+pluto-tree pluto-tree-items.struct > p-r > p-k::after {
+  content: " = ";
+}
+
+pluto-tree.collapsed p-r::after {
+  content: ",";
+}
+
+pluto-tree.collapsed p-r:last-child::after {
+  content: "";
+}
+
+pluto-tree-more {
+  display: inline-block;
+  padding: 0.6em 0em;
+  cursor: pointer;
+  /* this only affects pluto-tree-more inside a table */
+  width: 100%;
+  white-space: nowrap;
+}
+
+pluto-tree-more.disabled {
+  cursor: not-allowed;
+}
+
+pluto-tree-more::before {
+  margin-left: 0.2em;
+  margin-right: 0.5em;
+  bottom: -0.1em;
+  display: inline-block;
+  position: relative;
+  content: "";
+  background-size: 100%;
+  height: 1em;
+  width: 1em;
+  opacity: 0.5;
+  /* Icons adapt to theme through opacity */
+  background-image: url("https://cdn.jsdelivr.net/gh/ionic-team/ionicons@5.5.1/src/svg/ellipsis-vertical.svg");
+}
+
+pluto-tree-more.loading::before {
+  background-image: url("https://cdn.jsdelivr.net/gh/ionic-team/ionicons@5.5.1/src/svg/sync-outline.svg");
+  animation: loadspin 3s ease-in-out infinite;
+}
+
+@keyframes loadspin {
+  0% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(180deg);
+  }
+  50% {
+    transform: rotate(180deg);
+  }
+  75% {
+    transform: rotate(360deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+pluto-tree.collapsed pluto-tree-more {
+  margin: 0em;
+}
+pluto-tree.collapsed pluto-tree-more::before {
+  background-image: url("https://cdn.jsdelivr.net/gh/ionic-team/ionicons@5.5.1/src/svg/ellipsis-horizontal.svg");
+}
+
+/*  */
+
+pluto-tree.collapsed img {
+  max-width: 4rem;
+  max-height: 4rem;
+}
+
+pluto-tree img {
+  max-width: 12rem;
+  max-height: 8rem;
+}
+
+pluto-tree p-r pre {
+  white-space: pre;
+  word-break: normal;
+  margin: 0.1em;
+}
+
+/*  */
+
+jlerror {
+  font-size: 0.75rem;
+  font-family: var(--vscode-editor-font-family, monospace);
+}
+jlerror {
+  display: block;
+  padding: 1em;
+  background-color: var(--vscode-textCodeBlock-background);
+  border-radius: 0.3em;
+  margin: 1em 0;
+  overflow-wrap: break-word;
+}
+
+jlerror > header {
+  color: var(--vscode-errorForeground);
+  border-left: 1px solid var(--vscode-errorForeground);
+  padding: 0.7rem;
+  background: var(--vscode-editor-background);
+  border-radius: 1px;
+}
+jlerror > header > p {
+  margin-block-end: 0.2em;
+  white-space: pre-wrap;
+}
+jlerror > header > p:first-child {
+  margin-block-start: 0;
+}
+jlerror .stacktrace-header,
+jlerror .error-header {
+  font-family: var(--vscode-font-family, system-ui);
+}
+jlerror .error-header {
+  margin-block-end: 1em;
+}
+jlerror secret-h1 {
+  font-size: 1.2em;
+  font-weight: 700;
+  color: var(--vscode-foreground);
+}
+jlerror > section {
+  border-block-start: 1px dashed
+    var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border));
+  margin-block-start: 1rem;
+  padding-block-start: 1rem;
+}
+jlerror .stacktrace-waiting-to-view {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 1rem 0 0 0;
+}
+jlerror .stacktrace-waiting-to-view button {
+  background: var(--vscode-button-background);
+  border: none;
+  border-radius: 3px;
+  padding: 0.2em 0.4em;
+  font-size: 1em;
+  color: var(--vscode-button-foreground);
+  font-family: var(--vscode-font-family, system-ui);
+  cursor: pointer;
+  font-weight: 500;
+}
+jlerror .stacktrace-waiting-to-view button:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+jlerror > section > ol {
+  line-height: 1.6;
+  /* transform: perspective(29rem) rotateX(-12.7deg); */
+  /* transform-origin: top; */
+  /* perspective-origin: top; */
+}
+jlerror > section > ol > li {
+  margin-block-end: 1em;
+}
+
+jlerror > section > ol > li:not(.important):not(:hover) {
+  opacity: 0.5;
+}
+
+jlerror > section > ol > li:not(.important)::marker {
+  font-weight: 100;
+}
+jlerror > section > ol > li.from_this_notebook {
+  --bg: var(--vscode-badge-background);
+  background: var(--bg);
+  outline: 3px solid var(--bg);
+  padding: 0.4em 0em;
+  border-radius: 0.6em;
+}
+jlerror > section .classical-frame > mark {
+  background: var(--vscode-editor-selectionBackground);
+  border-radius: 6px;
+  color: var(--vscode-editor-foreground);
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-variant-ligatures: none;
+}
+jlerror > section .classical-frame > mark > strong {
+  color: var(--vscode-foreground);
+  font-weight: 700;
+}
+jlerror > section .classical-frame s-span .argument_name {
+  color: var(
+    --vscode-symbolIcon-variableForeground,
+    var(--vscode-editor-foreground)
+  );
+}
+jlerror > section .frame-source {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  /* justify-content: flex-end; */
+}
+jlerror > section .frame-source > a {
+  background: var(--vscode-textLink-activeForeground, rgba(14, 99, 156, 0.2));
+  border-radius: 4px;
+  padding: 1px 7px;
+  text-decoration: none;
+  border-left: 3px solid var(--vscode-textLink-foreground);
+  color: var(--vscode-textLink-foreground);
+}
+jlerror > section .frame-source > a:hover {
+  background: var(--vscode-textLink-activeForeground, rgba(14, 99, 156, 0.3));
+}
+jlerror > section .frame-source > a:not([href]) {
+  filter: grayscale(1);
+}
+jlerror > section .frame-source > a[href].remote-url {
+  filter: hue-rotate(160deg);
+}
+jlerror
+  > section
+  li.from_this_notebook:not(.from_this_cell)
+  .frame-source
+  > a[href] {
+  filter: hue-rotate(50deg);
+}
+jlerror > section .frame-source > span {
+  opacity: 0.4;
+  padding: 0px 0.2em;
+}
+jlerror > section .doclink {
+  user-select: none;
+}
+
+jlerror li::marker {
+  background: red;
+  border: 3px solid red;
+  /* font-size: 0.7rem; */
+  font-weight: 900;
+  color: var(--vscode-errorForeground, red);
+}
+
+jlerror li a.frame-line-preview {
+  display: block;
+  text-decoration: none;
+  border: 3px solid var(--vscode-textLink-foreground);
+  --br: 0.6em;
+  border-radius: var(--br);
+  --crop: -0.5em;
+}
+jlerror li .frame-line-preview pre:not(.asdfdsaf) {
+  background-color: var(--vscode-editor-background);
+  padding: 0;
+  border-radius: var(--br);
+  overflow: hidden;
+  position: relative;
+  display: block;
+}
+
+jlerror li:not(.from_this_cell) .frame-line-preview pre::after {
+  content: "cell preview";
+  display: block;
+  position: absolute;
+  bottom: 0;
+  right: 1ch;
+  font-weight: 900;
+  opacity: 0.6;
+}
+
+jlerror li .frame-line-preview pre > code {
+  padding: 0;
+}
+jlerror li .frame-line-preview pre > code:not(:only-child).frame-line {
+  background: var(
+    --vscode-editor-selectionHighlightBackground,
+    var(--vscode-editor-selectionBackground)
+  );
+}
+jlerror li .frame-line-preview pre > code:not(.frame-line) {
+  opacity: 0.7;
+}
+jlerror li .frame-line-preview pre > code::before {
+  content: var(--before-content);
+  color: var(--vscode-editorLineNumber-foreground);
+  margin-right: 0.7em;
+  width: 2ch;
+  display: inline-block;
+  text-align: right;
+}
+
+jlerror li .frame-line-preview pre > code:first-of-type:not(.frame-line) {
+  margin-top: var(--crop);
+}
+jlerror li .frame-line-preview pre > code:last-of-type:not(.frame-line) {
+  margin-bottom: var(--crop);
+}
+
+jlerror .dont-panic {
+  display: none;
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0.5em;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  border-radius: 0.2em;
+  font-family: var(--vscode-font-family, system-ui);
+  font-size: 1.2rem;
+  font-weight: 700;
+  transform: rotate(6deg);
+}
+
+pluto-editor.disable_ui jlerror .dont-panic {
+  display: none;
+}
+
+pluto-logs jlerror .dont-panic {
+  display: none;
+}
+
+table.pluto-table {
+  table-layout: fixed;
+}
+
+table.pluto-table td {
+  max-width: 300px;
+  overflow: auto;
+}
+
+@supports (-moz-appearance: none) {
+  table.pluto-table td {
+    max-width: unset;
+    overflow: visible;
+  }
+
+  table.pluto-table td > div {
+    max-width: 300px;
+    overflow: auto;
+  }
+}
+
+table.pluto-table .schema-types {
+  color: var(
+    --vscode-symbolIcon-keywordForeground,
+    var(--vscode-editor-foreground)
+  );
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.75rem;
+  opacity: 0;
+}
+
+table.pluto-table .schema-types th {
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background-color: var(--vscode-editor-background);
+  height: 2rem;
+}
+
+table.pluto-table thead:hover .schema-types {
+  opacity: 1;
+}
+
+table.pluto-table .schema-names th {
+  transform: translate(0, 0.5em);
+  transition: transform 0.1s ease-in-out;
+}
+table.pluto-table .schema-names th:first-child,
+table.pluto-table .schema-types th:first-child {
+  z-index: 2;
+  left: -10px;
+}
+
+table.pluto-table .schema-names th,
+table.pluto-table .schema-types th:first-child {
+  background-color: var(--vscode-editor-background);
+  position: sticky;
+  top: 0.25rem;
+  height: 2rem;
+  z-index: 1;
+}
+
+table.pluto-table thead:hover .schema-names th {
+  transform: translate(0, 0);
+}
+
+table.pluto-table tbody th:first-child {
+  background-color: var(--vscode-editor-background);
+  position: sticky;
+  left: -10px; /* padding-left of pluto-output*/
+  white-space: nowrap;
+}
+
+table.pluto-table .pluto-tree-more-td {
+  text-align: left;
+  overflow: unset;
+}
+
+table.pluto-table .pluto-tree-more-td pluto-tree-more {
+  overflow: unset;
+  position: sticky;
+  left: 0;
+  top: 2rem;
+  max-width: 650px;
+}
+
+table.pluto-table tr.empty div {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  font-size: 1.5rem;
+  flex-flow: column nowrap;
+}
+table.pluto-table tr.empty small {
+  font-size: 0.5rem;
+}
+
+pluto-tree.collapsed p-v > pre {
+  max-height: 2em;
+  overflow-y: hidden;
+}

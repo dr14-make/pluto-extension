@@ -1,189 +1,245 @@
 import "@plutojl/rainbow/node-polyfill";
-import { CellResultData, Host, Worker } from "@plutojl/rainbow";
-import { ChildProcess, spawn } from "child_process";
+import type { CellResultData, Worker } from "@plutojl/rainbow";
+import { Host } from "@plutojl/rainbow";
 import { readFile } from "fs/promises";
+import { PlutoServerTaskManager } from "./plutoServerTask.js";
+import { EventEmitter } from "events";
+
+/**
+ * Events emitted by PlutoManager
+ */
+export interface PlutoManagerEvents {
+  serverStateChanged: () => void;
+  notebookOpened: (notebookPath: string) => void;
+  notebookClosed: (notebookPath: string) => void;
+  cellUpdated: (notebookPath: string, cellId: string) => void;
+}
+
+export interface PlutoManagerLogger {
+  showWarningMessage: <T extends string>(
+    message: string,
+    ...items: T[]
+  ) => Thenable<T | undefined>;
+  showInfoMessage: <T extends string>(
+    message: string,
+    ...items: T[]
+  ) => Thenable<T | undefined>;
+  showErrorMessage: <T extends string>(
+    message: string,
+    ...items: T[]
+  ) => Thenable<T | undefined>;
+}
 /**
  * Manages connection to Pluto server and notebook sessions
  */
 export class PlutoManager {
   private host?: Host; // Host from @plutojl/rainbow
-  private workers: Map<string, Worker> = new Map(); // notebook_id -> Worker
+  private readonly workers: Map<string, Worker> = new Map(); // notebook_id -> Worker
   private serverUrl: string;
-  private juliaProcess?: ChildProcess;
+  private readonly taskManager: PlutoServerTaskManager;
+  private usingCustomServerUrl = false;
+  private readonly notebooksToRecreate: Set<string> = new Set(); // Paths of notebooks to recreate after reconnect
+  private readonly eventEmitter: EventEmitter = new EventEmitter();
 
   constructor(
-    private port: number = 1234,
-    private outputChannel: {
-      appendLine: (msg: string) => void;
-      showWarningMessage<T extends string>(
-        message: string,
-        ...items: T[]
-      ): Thenable<T | undefined>;
-    }
+    private readonly port = 1234,
+    private readonly logger: PlutoManagerLogger,
+    serverUrl?: string
   ) {
-    this.serverUrl = `http://localhost:${port}`;
+    if (serverUrl) {
+      this.serverUrl = serverUrl;
+      this.usingCustomServerUrl = true;
+    } else {
+      this.serverUrl = `http://localhost:${this.port}`;
+    }
+
+    this.taskManager = new PlutoServerTaskManager(this.port);
+
+    // Register callback to reset state when server task stops
+    this.taskManager.onStop(() => {
+      this.onServerStopped();
+    });
+  }
+
+  /**
+   * Register event listener
+   */
+  public on<K extends keyof PlutoManagerEvents>(
+    event: K,
+    listener: PlutoManagerEvents[K]
+  ): void {
+    this.eventEmitter.on(event, listener);
+  }
+
+  /**
+   * Remove event listener
+   */
+  public off<K extends keyof PlutoManagerEvents>(
+    event: K,
+    listener: PlutoManagerEvents[K]
+  ): void {
+    this.eventEmitter.off(event, listener);
+  }
+
+  /**
+   * Emit event
+   */
+  private emit<K extends keyof PlutoManagerEvents>(
+    event: K,
+    ...args: Parameters<PlutoManagerEvents[K]>
+  ): void {
+    this.eventEmitter.emit(event, ...args);
+  }
+
+  /**
+   * Called when server task stops unexpectedly
+   */
+  private onServerStopped(): void {
+    // Store notebook paths for recreation after reconnect
+    this.notebooksToRecreate.clear();
+    for (const notebookPath of this.workers.keys()) {
+      this.notebooksToRecreate.add(notebookPath);
+    }
+
+    // Close all workers
+    for (const worker of this.workers.values()) {
+      void worker.shutdown();
+    }
+    this.workers.clear();
+
+    // Reset host
+    this.host = undefined;
+
+    // Emit server state changed event
+    this.emit("serverStateChanged");
+
+    // Show warning to user if server stopped unexpectedly
+    if (!this.taskManager.isRunning()) {
+      this.logger
+        .showErrorMessage(
+          "Pluto server stopped unexpectedly. Click 'Restart' to start it again.",
+          "Restart"
+        )
+        .then((choice) => {
+          if (choice === "Restart") {
+            this.start().catch((error) => {
+              this.logger.showErrorMessage(
+                `Failed to restart Pluto server: ${error.message}`
+              );
+            });
+          }
+        });
+    }
   }
 
   /**
    * Check if Pluto server is running
    */
-  isRunning(): boolean {
-    return !!this.juliaProcess && this.isConnected();
+  public isRunning(): boolean {
+    return this.taskManager.isRunning() && this.isConnected();
   }
 
   /**
    * Check if connected to a host (with or without owning the process)
    */
-  isConnected(): boolean {
+  public isConnected(): boolean {
     return !!this.host;
-  }
-
-  /**
-   * Log message to output channel
-   */
-  log(message: string): void {
-    this.outputChannel.appendLine(message);
   }
 
   /**
    * Connect to an existing Pluto server without starting a new one
    */
-  async connect(): Promise<void> {
+  public async connect(): Promise<void> {
     if (this.isConnected()) {
-      this.log("Already connected to a Pluto server");
       return;
     }
 
-    this.log(`Connecting to Pluto server at ${this.serverUrl}...`);
-
-    try {
-      this.host = new Host(this.serverUrl);
-      this.log("Connected to Pluto server successfully!");
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.log(`Failed to connect to Pluto server: ${errorMessage}`);
-      throw error;
-    }
+    this.host = new Host(this.serverUrl);
   }
 
   /**
-   * Start Pluto server
+   * Start Pluto server (or connect to custom server URL)
    */
-  async start(): Promise<void> {
-    if (this.juliaProcess) {
-      this.log("Pluto server is already running");
+  public async start(): Promise<void> {
+    // If using custom server URL, just connect without starting
+    if (this.usingCustomServerUrl) {
+      await this.connect();
+      await this.recreateWorkers();
       return;
     }
 
-    this.log(`Starting Pluto server on port ${this.port}...`);
+    // Check if already running
+    if (this.taskManager.isRunning()) {
+      return;
+    }
 
-    try {
-      this.juliaProcess = await this.runServer(this.port);
-      this.log("Pluto server started successfully!");
+    await this.taskManager.start();
+    await this.taskManager.waitForReady();
+    await this.connect();
 
-      // Pipe Julia stdout to output channel
-      this.juliaProcess.stdout?.on("data", (data) => {
-        this.log(data.toString());
-      });
+    // Emit server state changed event
+    this.emit("serverStateChanged");
 
-      // Pipe Julia stderr to output channel
-      this.juliaProcess.stderr?.on("data", (data) => {
-        this.log(data.toString());
-      });
+    // Recreate workers for notebooks that were open before server stopped
+    await this.recreateWorkers();
+  }
 
-      // Handle process exit
-      this.juliaProcess.on("exit", (code) => {
-        this.log(`Pluto server exited with code ${code ?? "unknown"}`);
+  /**
+   * Recreate workers for notebooks that were open before server stopped
+   */
+  private async recreateWorkers(): Promise<void> {
+    if (this.notebooksToRecreate.size === 0) {
+      return;
+    }
 
-        // Show warning if server exits unexpectedly
-        if (code !== 0 && code !== null) {
-          this.outputChannel.showWarningMessage(
-            `Pluto server stopped unexpectedly with exit code ${code}`
-          );
-        }
+    const notebookPaths = Array.from(this.notebooksToRecreate);
+    this.notebooksToRecreate.clear();
 
-        this.juliaProcess = undefined;
-        this.host = undefined;
-      });
-
-      // Initialize host connection
-      this.host = new Host(this.serverUrl);
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.log(`Failed to start Pluto server: ${errorMessage}`);
-      throw error;
+    for (const notebookPath of notebookPaths) {
+      try {
+        // Use getWorker to recreate the worker
+        await this.getWorker(notebookPath);
+      } catch (error) {
+        // Log error but continue with other notebooks
+        console.error(`Failed to recreate worker for ${notebookPath}:`, error);
+      }
     }
   }
 
   /**
    * Stop Pluto server
    */
-  async stop(): Promise<void> {
-    if (!this.juliaProcess) {
-      this.log("Pluto server is not running");
-      return;
-    }
-
-    this.log("Stopping Pluto server...");
-
+  public async stop(): Promise<void> {
     // Close all workers
     for (const worker of this.workers.values()) {
-      worker.close();
+      await worker.shutdown();
     }
     this.workers.clear();
 
-    // Kill Julia process
-    this.juliaProcess.kill();
-    this.juliaProcess = undefined;
+    // Stop task
+    if (this.taskManager.isRunning()) {
+      await this.taskManager.stop();
+    }
+
     this.host = undefined;
 
-    this.log("Pluto server stopped");
+    // Emit server state changed event
+    this.emit("serverStateChanged");
   }
 
   /**
    * Restart Pluto server
    */
-  async restart(): Promise<void> {
-    this.log("Restarting Pluto server...");
+  public async restart(): Promise<void> {
     await this.stop();
     await this.start();
-  }
-
-  private runServer(port: number = 1234): Promise<ChildProcess> {
-    return new Promise((resolve, reject) => {
-      const julia = spawn("julia", [
-        "-e",
-        `using Pluto;Pluto.run(port=${port};require_secret_for_open_links=false, require_secret_for_access=false, launch_browser=false)`,
-      ]);
-
-      julia.stdout?.on("data", (data) => {
-        this.log(`[Server Init] ${data}`);
-        if (data.toString().includes("Go to")) {
-          resolve(julia);
-        }
-      });
-
-      julia.stderr?.on("data", (data) => {
-        this.log(`[Server Init] ${data}`);
-        if (data.toString().includes("Go to")) {
-          resolve(julia);
-        }
-      });
-
-      julia.on("error", (error) => {
-        this.outputChannel.appendLine(`[Server Init Error] ${error.message}`);
-        setTimeout(() => reject(error), 1000);
-      });
-    });
   }
 
   /**
    * Get or create a worker for a notebook
    * const notebookPath = notebookUri.fsPath;
    */
-  async getWorker(notebookPath: string): Promise<Worker | undefined> {
+  public async getWorker(notebookPath: string): Promise<Worker | undefined> {
     if (!this.isConnected()) {
       await this.start();
     }
@@ -199,9 +255,13 @@ export class PlutoManager {
         notebookContent = new TextDecoder().decode(fileContent);
         worker = await this.host.createWorker(notebookContent.trim());
         this.workers.set(notebookPath, worker);
+
+        // Emit notebook opened event
+        this.emit("notebookOpened", notebookPath);
       } catch (error) {
-        this.log(`Error reading notebook file: ${error}`);
-        throw new Error(`Cannot create worker: failed to read notebook file`);
+        throw new Error(
+          `Cannot create worker: failed to read notebook file: ${error}`
+        );
       }
     }
 
@@ -216,33 +276,37 @@ export class PlutoManager {
   /**
    * Execute a cell
    */
-  async executeCell(
+  public async executeCell(
     worker: Worker,
     cellId: string,
     code: string
   ): Promise<CellResultData | null> {
-    try {
-      // Update existing cell code and run it
-      await worker.updateSnippetCode(cellId, code, true);
+    // Update existing cell code and run it
+    await worker.updateSnippetCode(cellId, code, true);
 
-      // Wait for execution to complete
-      // await worker.wait(true);
+    // Wait for execution to complete
+    // await worker.wait(true);
 
-      // Get cell result
-      const cellData = worker.getSnippet(cellId);
-      return cellData?.results ?? null;
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.log(`[Cell Execution Error] ${errorMessage}`);
-      throw error;
-    }
+    // Get cell result
+    const cellData = worker.getSnippet(cellId);
+    return cellData?.result ?? null;
+  }
+
+  /**
+   * Emit cell updated event (to be called by controller)
+   */
+  public emitCellUpdated(notebookPath: string, cellId: string): void {
+    this.emit("cellUpdated", notebookPath, cellId);
   }
 
   /**
    * Add a new cell to the notebook
    */
-  async addCell(worker: Worker, index: number, code: string): Promise<string> {
+  public async addCell(
+    worker: Worker,
+    index: number,
+    code: string
+  ): Promise<string> {
     const cellId = await worker.addSnippet(index, code);
     return cellId;
   }
@@ -250,34 +314,38 @@ export class PlutoManager {
   /**
    * Delete a cell from the notebook
    */
-  async deleteCell(worker: Worker, cellId: string): Promise<void> {
+  public async deleteCell(worker: Worker, cellId: string): Promise<void> {
     await worker.deleteSnippets([cellId]);
   }
 
   /**
-   * Restart the notebook kernel
+   * Get the server URL
    */
-  async restartNotebook(worker: Worker): Promise<void> {
-    await worker.restart();
+  public getServerUrl(): string {
+    return this.serverUrl;
   }
 
   /**
    * Close connection to a notebook
    * const notebookPath = notebookUri.fsPath;
    */
-  closeNotebook(notebookPath: string): void {
+  public async closeNotebook(notebookPath: string): Promise<void> {
     const worker = this.workers.get(notebookPath);
 
     if (worker) {
-      worker.close();
       this.workers.delete(notebookPath);
+
+      // Emit notebook closed event
+      this.emit("notebookClosed", notebookPath);
+      await worker.shutdown();
+      worker.close();
     }
   }
 
   /**
    * Get list of open notebooks
    */
-  getOpenNotebooks(): Array<{ path: string; notebookId: string }> {
+  public getOpenNotebooks(): Array<{ path: string; notebookId: string }> {
     const notebooks: Array<{ path: string; notebookId: string }> = [];
     for (const [path, worker] of this.workers.entries()) {
       notebooks.push({
@@ -292,45 +360,60 @@ export class PlutoManager {
    * Execute Julia code in a notebook without creating a persistent cell
    * This uses waitSnippet at index 0 and then immediately deletes the cell
    */
-  async executeCodeEphemeral(
+  public async executeCodeEphemeral(
     worker: Worker,
     code: string
   ): Promise<CellResultData> {
-    try {
-      // Execute code at index 0 (creates a temporary cell)
-      const result = await worker.waitSnippet(0, code);
+    // Execute code at index 0 (creates a temporary cell)
+    const result = await worker.waitSnippet(0, code);
 
-      // Delete the cell immediately after execution
-      try {
-        await worker.deleteSnippets([result.cell_id]);
-      } catch (deleteError) {
-        // Log but don't fail if deletion fails
-        this.log(
-          `Warning: Failed to delete ephemeral cell ${result.cell_id}: ${deleteError}`
-        );
-      }
+    // Delete the cell immediately after execution
+    await worker.deleteSnippets([result.cell_id]);
 
-      return result;
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      this.log(`[Ephemeral Execution Error] ${errorMessage}`);
-      throw error;
-    }
+    return result;
   }
 
   /**
    * Close all notebook connections
    */
-  dispose(): void {
+  public async dispose(): Promise<void> {
     for (const worker of this.workers.values()) {
-      worker.close();
+      await worker.shutdown();
     }
     this.workers.clear();
 
-    // Kill Julia process
-    if (this.juliaProcess) {
-      this.juliaProcess.kill();
+    // Stop task (fire and forget - dispose is not async)
+    if (this.taskManager.isRunning()) {
+      await this.taskManager.stop().catch(() => {
+        // Ignore errors during dispose
+      });
+    }
+  }
+
+  public async restartNotebook(notebookPath?: string): Promise<void> {
+    try {
+      // Close existing worker
+      for (const notebook of this.getOpenNotebooks()) {
+        if (!notebookPath || notebook.path === notebookPath) {
+          await this.closeNotebook(notebook.path);
+
+          // Wait a bit for cleanup
+          await new Promise((resolve) => setTimeout(resolve, 100));
+
+          // Recreate worker
+          await this.getWorker(notebook.path);
+
+          void this.logger.showInfoMessage(
+            `Reconnected to notebook: ${notebook.path.split("/").pop()}`
+          );
+        }
+      }
+    } catch (error) {
+      void this.logger.showErrorMessage(
+        `Failed to reconnect notebook: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 }
