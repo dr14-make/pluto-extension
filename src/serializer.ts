@@ -15,9 +15,9 @@ export function formatCellOutput(
 }
 
 export class PlutoNotebookSerializer implements vscode.NotebookSerializer {
-  async deserializeNotebook(
+  public async deserializeNotebook(
     content: Uint8Array,
-    _token: vscode.CancellationToken
+    __token: vscode.CancellationToken
   ): Promise<vscode.NotebookData> {
     const contents = new TextDecoder().decode(content);
 
@@ -51,19 +51,19 @@ export class PlutoNotebookSerializer implements vscode.NotebookSerializer {
     }
   }
 
-  async serializeNotebook(
+  public async serializeNotebook(
     data: vscode.NotebookData,
-    _token: vscode.CancellationToken
+    __token: vscode.CancellationToken
   ): Promise<Uint8Array> {
     try {
-      const serialized = await serializePlutoNotebook(
+      const serialized = serializePlutoNotebook(
         data.cells,
         data.metadata?.pluto_notebook_id as string,
         data.metadata?.pluto_version as string
       );
 
       return new TextEncoder().encode(serialized);
-    } catch (error) {
+    } catch {
       // Fallback: concatenate all cells
       const contents = data.cells.map((cell) => cell.value).join("\n\n");
       return new TextEncoder().encode(contents);

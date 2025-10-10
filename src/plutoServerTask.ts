@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { isDefined, isNotDefined } from "./helpers.ts";
 
 /**
  * Parse Julia executable path to extract command and arguments
@@ -8,7 +9,7 @@ function parseJuliaExecutable(executablePath: string): {
   args: string[];
 } {
   // Split by spaces but respect quoted strings
-  const parts = executablePath.match(/(?:[^\s"]+|"[^"]*")+/g) || [
+  const parts = executablePath.match(/(?:[^\s"]+|"[^"]*")+/g) ?? [
     executablePath,
   ];
   const command = parts[0].replace(/"/g, ""); // Remove quotes from command
@@ -25,28 +26,28 @@ export class PlutoServerTaskManager {
   private serverReadyResolve?: () => void;
   private onStopCallback?: () => void;
   private taskEndListener?: vscode.Disposable;
-  private isStarting: boolean = false;
+  private isStarting = false;
 
-  constructor(private port: number = 1234) {}
+  constructor(private readonly port = 1234) {}
 
   /**
    * Check if server task is running
    */
-  isRunning(): boolean {
+  public isRunning(): boolean {
     return !!this.taskExecution || this.isStarting;
   }
 
   /**
    * Set callback to be called when server stops
    */
-  onStop(callback: () => void): void {
+  public onStop(callback: () => void): void {
     this.onStopCallback = callback;
   }
 
   /**
    * Start Pluto server as a VSCode task
    */
-  async start(): Promise<void> {
+  public async start(): Promise<void> {
     if (this.taskExecution || this.isStarting) {
       throw new Error("Pluto server task is already running");
     }
@@ -76,8 +77,8 @@ export class PlutoServerTaskManager {
 
     // Get Julia settings
     const juliaConfig = vscode.workspace.getConfiguration("julia");
-    const executablePath = juliaConfig.get<string>("executablePath") || "julia";
-    const environmentPath = juliaConfig.get<string>("environmentPath") || "";
+    const executablePath = juliaConfig.get<string>("executablePath") ?? "julia";
+    const environmentPath = juliaConfig.get<string>("environmentPath") ?? "";
 
     // Parse Julia executable to handle arguments like --sysimage
     const { command, args: baseArgs } = parseJuliaExecutable(executablePath);
@@ -174,7 +175,7 @@ export class PlutoServerTaskManager {
       this.isStarting = false;
 
       // Cleanup listener
-      if (this.taskEndListener) {
+      if (isDefined(this.taskEndListener)) {
         this.taskEndListener.dispose();
         this.taskEndListener = undefined;
       }
@@ -199,10 +200,10 @@ export class PlutoServerTaskManager {
         });
 
         // If we get any response (even error), server is running
-        if (response) {
+        if (isNotDefined(response)) {
           return;
         }
-      } catch (error) {
+      } catch {
         // Server not ready yet, continue polling
       }
 
@@ -216,7 +217,7 @@ export class PlutoServerTaskManager {
   /**
    * Stop Pluto server task
    */
-  async stop(): Promise<void> {
+  public async stop(): Promise<void> {
     if (!this.taskExecution) {
       return;
     }
@@ -229,14 +230,14 @@ export class PlutoServerTaskManager {
   /**
    * Get the server URL
    */
-  getServerUrl(): string {
+  public getServerUrl(): string {
     return `http://localhost:${this.port}`;
   }
 
   /**
    * Wait for server to be ready
    */
-  async waitForReady(): Promise<void> {
+  public async waitForReady(): Promise<void> {
     if (this.serverReadyPromise) {
       await this.serverReadyPromise;
     }

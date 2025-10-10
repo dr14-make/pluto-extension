@@ -2,8 +2,8 @@ import type { CellInputData, NotebookData } from "@plutojl/rainbow";
 import { parse, serialize } from "./rainbowAdapter.ts";
 import * as vscode from "vscode";
 import { formatCellOutput } from "./serializer.ts";
-import { validate } from "uuid";
-import { v4 as uuidv4 } from "uuid";
+import { v4 as uuidv4, validate } from "uuid";
+import { isNotDefined } from "./helpers.ts";
 
 /**
  * Pure functions for Pluto notebook parsing and serialization
@@ -23,17 +23,17 @@ export interface ParsedNotebook {
 export function createVsCodeCellFromPlutoCell(
   notebookData: NotebookData,
   plutoCellId: string
-) {
-  // Validate UUID
+): vscode.NotebookCellData | null {
+  // Validate UUID format and check cell exists
   const cellInput = notebookData.cell_inputs[plutoCellId];
 
-  if (!validate(plutoCellId) || !cellInput) {
+  if (!validate(plutoCellId) || isNotDefined(cellInput)) {
     throw new Error(
       `Invalid or missing cell ID: ${plutoCellId} fix in the code`
     );
   }
 
-  let code = cellInput.code || "";
+  let code = cellInput.code ?? "";
 
   // Check if cell is markdown by looking for #VSCODE-MARKDOWN marker or md""" wrapper
   const isVSCodeMarkdown = isMarkdownCell(code);
@@ -50,7 +50,7 @@ export function createVsCodeCellFromPlutoCell(
     code,
     isMarkdown ? "markdown" : "julia"
   );
-  const results = notebookData.cell_results[plutoCellId] || null;
+  const results = notebookData.cell_results[plutoCellId] ?? null;
   if (results !== null) {
     // Add output if available
     cellData.outputs = [formatCellOutput(results)];
@@ -70,7 +70,7 @@ export function parsePlutoNotebook(content: string): ParsedNotebook {
   const notebookData = parse(content);
 
   const cells: vscode.NotebookCellData[] = [];
-  if (!notebookData) {
+  if (isNotDefined(notebookData)) {
     return {
       cells: [],
       notebook_id: "",
@@ -78,10 +78,10 @@ export function parsePlutoNotebook(content: string): ParsedNotebook {
     };
   }
   const cell_order =
-    notebookData.cell_order || Object.keys(notebookData.cell_inputs);
+    notebookData.cell_order ?? Object.keys(notebookData.cell_inputs);
   for (const cellId of cell_order) {
     const cell = createVsCodeCellFromPlutoCell(notebookData, cellId);
-    if (!cell) {
+    if (isNotDefined(cell)) {
       continue;
     }
 
@@ -98,16 +98,16 @@ export function parsePlutoNotebook(content: string): ParsedNotebook {
 /**
  * Serialize cells back to Pluto notebook format
  */
-export async function serializePlutoNotebook(
+export function serializePlutoNotebook(
   cells: vscode.NotebookCellData[],
   notebookId?: string,
   plutoVersion?: string
-): Promise<string> {
+): string {
   const cellInputs: Record<string, PlutoCellData> = {};
   const cellOrder: string[] = [];
 
   for (const cell of cells) {
-    const cellId = cell.metadata?.pluto_cell_id || generateCellId();
+    const cellId = cell.metadata?.pluto_cell_id ?? generateCellId();
 
     // Wrap markdown cells in md"""...""" and add #VSCODE-MARKDOWN marker
     let code = cell.value;
@@ -132,7 +132,7 @@ export async function serializePlutoNotebook(
   }
 
   const notebookData: PlutoNotebookData = {
-    notebook_id: notebookId || generateNotebookId(),
+    notebook_id: notebookId ?? generateNotebookId(),
     pluto_version: plutoVersion,
     path: "",
     shortpath: "",
@@ -152,7 +152,7 @@ export async function serializePlutoNotebook(
     status_tree: null,
   };
 
-  return await serialize(notebookData);
+  return serialize(notebookData);
 }
 
 /**

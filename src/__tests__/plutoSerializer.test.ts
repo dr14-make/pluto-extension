@@ -4,10 +4,14 @@ import {
   isMarkdownCell,
 } from "../plutoSerializer.ts";
 import { readFileSync } from "fs";
-import { join } from "path";
-import { NotebookCellData, NotebookCellKind } from "vscode";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+import { type NotebookCellData, NotebookCellKind } from "vscode";
 import { v4 as uuidv4, validate } from "uuid";
-import { pl } from "zod/v4/locales";
+
+// ES module equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 describe("Pluto Serializer Functions", () => {
   let demoNotebookContent: string;
@@ -35,10 +39,10 @@ describe("Pluto Serializer Functions", () => {
   });
 
   describe("parsePlutoNotebook with demo.jl", () => {
-    let parsed: Awaited<ReturnType<typeof parsePlutoNotebook>>;
+    let parsed: ReturnType<typeof parsePlutoNotebook>;
 
     beforeAll(async () => {
-      parsed = await parsePlutoNotebook(demoNotebookContent);
+      parsed = parsePlutoNotebook(demoNotebookContent);
     });
 
     it("should parse demo notebook successfully", () => {
@@ -75,9 +79,7 @@ describe("Pluto Serializer Functions", () => {
 
     it("should preserve cell IDs", () => {
       for (const cell of parsed.cells) {
-        expect(cell.meid).toBeDefined();
-        expect(typeof cell.id).toBe("string");
-        expect(cell.id.length).toBeGreaterThan(0);
+        expect(typeof cell.metadata?.pluto_cell_id).toBe("string");
       }
     });
 
@@ -139,7 +141,7 @@ describe("Pluto Serializer Functions", () => {
         },
       ];
 
-      const serialized = await serializePlutoNotebook(cells);
+      const serialized = serializePlutoNotebook(cells);
 
       expect(serialized).toBeDefined();
       expect(typeof serialized).toBe("string");
@@ -160,14 +162,14 @@ describe("Pluto Serializer Functions", () => {
         },
       ];
 
-      const serialized = await serializePlutoNotebook(cells);
+      const serialized = serializePlutoNotebook(cells);
 
       expect(serialized).toContain('md"""');
       expect(serialized).toContain("# Title");
     });
 
     it("should generate IDs for cells without them", async () => {
-      const cells: ParsedCell[] = [
+      const cells: NotebookCellData[] = [
         {
           languageId: "julia",
           value: "y = x + 1",
@@ -176,11 +178,11 @@ describe("Pluto Serializer Functions", () => {
         },
       ];
 
-      const serialized = await serializePlutoNotebook(cells);
+      const serialized = serializePlutoNotebook(cells);
 
       expect(serialized).toContain("x = 1");
       // Should have generated a UUID
-      const uuidRegex =
+      const _uuidRegex =
         /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/;
       expect(validate(serialized)).toBeTruthy();
     });
@@ -189,7 +191,7 @@ describe("Pluto Serializer Functions", () => {
   describe("Round-trip with demo.jl", () => {
     it("should parse and serialize demo notebook without data loss", async () => {
       // Parse
-      const parsed = await parsePlutoNotebook(demoNotebookContent);
+      const parsed = parsePlutoNotebook(demoNotebookContent);
 
       expect(parsed.cells.length).toBeGreaterThan(0);
       const originalCellCount = parsed.cells.length;
@@ -197,7 +199,7 @@ describe("Pluto Serializer Functions", () => {
       const originalLastCell = parsed.cells[parsed.cells.length - 1].value;
 
       // Serialize
-      const serialized = await serializePlutoNotebook(
+      const serialized = serializePlutoNotebook(
         parsed.cells,
         parsed.notebook_id,
         parsed.pluto_version
@@ -207,7 +209,7 @@ describe("Pluto Serializer Functions", () => {
       expect(serialized.length).toBeGreaterThan(0);
 
       // Parse again
-      const reParsed = await parsePlutoNotebook(serialized);
+      const reParsed = parsePlutoNotebook(serialized);
 
       expect(reParsed.cells.length).toBe(originalCellCount);
       expect(reParsed.cells[0].value).toBe(originalFirstCell);
@@ -217,56 +219,56 @@ describe("Pluto Serializer Functions", () => {
     });
 
     it("should preserve cell order", async () => {
-      const parsed = await parsePlutoNotebook(demoNotebookContent);
-      const originalOrder = parsed.cells.map((c) => c.id);
+      const parsed = parsePlutoNotebook(demoNotebookContent);
+      const originalOrder = parsed.cells.map((c) => c.metadata?.pluto_cell_id);
 
-      const serialized = await serializePlutoNotebook(
+      const serialized = serializePlutoNotebook(
         parsed.cells,
         parsed.notebook_id,
         parsed.pluto_version
       );
 
-      const reParsed = await parsePlutoNotebook(serialized);
+      const reParsed = parsePlutoNotebook(serialized);
       const newOrder = reParsed.cells.map((c) => c.metadata?.pluto_cell_id);
 
       expect(newOrder).toEqual(originalOrder);
     });
 
     it("should preserve markdown and code cell types", async () => {
-      const parsed = await parsePlutoNotebook(demoNotebookContent);
+      const parsed = parsePlutoNotebook(demoNotebookContent);
       const originalTypes = parsed.cells.map((c) => c.kind);
 
-      const serialized = await serializePlutoNotebook(
+      const serialized = serializePlutoNotebook(
         parsed.cells,
         parsed.notebook_id,
         parsed.pluto_version
       );
 
-      const reParsed = await parsePlutoNotebook(serialized);
+      const reParsed = parsePlutoNotebook(serialized);
       const newTypes = reParsed.cells.map((c) => c.kind);
 
       expect(newTypes).toEqual(originalTypes);
     });
 
     it("should preserve specific cell content", async () => {
-      const parsed = await parsePlutoNotebook(demoNotebookContent);
+      const parsed = parsePlutoNotebook(demoNotebookContent);
 
       // Find specific cells
       const xCell = parsed.cells.find((c) => c.value.trim() === "x = 5");
       const titleCell = parsed.cells.find((c) =>
-        c.code.includes("Pluto Notebook Demo")
+        c.value.includes("Pluto Notebook Demo")
       );
 
       expect(xCell).toBeDefined();
       expect(titleCell).toBeDefined();
 
       // Serialize and re-parse
-      const serialized = await serializePlutoNotebook(
+      const serialized = serializePlutoNotebook(
         parsed.cells,
         parsed.notebook_id,
         parsed.pluto_version
       );
-      const reParsed = await parsePlutoNotebook(serialized);
+      const reParsed = parsePlutoNotebook(serialized);
 
       // Verify cells still exist
       const xCellAfter = reParsed.cells.find((c) => c.value.trim() === "x = 5");
@@ -283,11 +285,11 @@ describe("Pluto Serializer Functions", () => {
 
   describe("Error handling", () => {
     it("should handle empty content", async () => {
-      await expect(parsePlutoNotebook("")).rejects.toThrow();
+      expect(() => parsePlutoNotebook("")).toThrow();
     });
 
     it("should handle invalid notebook", async () => {
-      await expect(parsePlutoNotebook("invalid content")).rejects.toThrow();
+      expect(() => parsePlutoNotebook("invalid content")).toThrow();
     });
 
     it("should handle notebook without cell order", async () => {
@@ -300,7 +302,7 @@ using InteractiveUtils
 # ╔═╡ aaa11111-1111-1111-1111-111111111111
 x = 1`;
 
-      const parsed = await parsePlutoNotebook(notebook);
+      const parsed = parsePlutoNotebook(notebook);
       expect(parsed).toBeDefined();
       // Cell order might be inferred or empty
     });

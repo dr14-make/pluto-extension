@@ -6,7 +6,7 @@ import type { PlutoManager } from "../plutoManager.ts";
  */
 async function startServerWithProgress(
   plutoManager: PlutoManager,
-  message: string = "Pluto server is ready"
+  message = "Pluto server is ready"
 ): Promise<void> {
   await vscode.window.withProgress(
     {
@@ -190,7 +190,7 @@ export async function initializePlutoServer(
 ): Promise<void> {
   try {
     await startServerWithProgress(plutoManager);
-  } catch (error) {
+  } catch {
     // Continue activation even if server fails to start
     // Users can manually start the server later
     serverOutputChannel.appendLine(

@@ -11,8 +11,8 @@ global.TextDecoder = TextDecoder;
 // Polyfill __dirname and __filename for ES modules in tests
 if (typeof __dirname === "undefined") {
   global.__dirname = (url) =>
-    dirname(fileURLToPath(url || "file://" + process.cwd()));
-  global.__filename = (url) => fileURLToPath(url || "file://" + process.cwd());
+    dirname(fileURLToPath(url ?? "file://" + process.cwd()));
+  global.__filename = (url) => fileURLToPath(url ?? "file://" + process.cwd());
 }
 
 // Import rainbow node polyfill after setting up global polyfills
