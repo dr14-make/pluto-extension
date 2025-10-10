@@ -14,6 +14,20 @@ export interface PlutoManagerEvents {
   cellUpdated: (notebookPath: string, cellId: string) => void;
 }
 
+export interface PlutoManagerLogger {
+  showWarningMessage: <T extends string>(
+    message: string,
+    ...items: T[]
+  ) => Thenable<T | undefined>;
+  showInfoMessage: <T extends string>(
+    message: string,
+    ...items: T[]
+  ) => Thenable<T | undefined>;
+  showErrorMessage: <T extends string>(
+    message: string,
+    ...items: T[]
+  ) => Thenable<T | undefined>;
+}
 /**
  * Manages connection to Pluto server and notebook sessions
  */
@@ -28,20 +42,17 @@ export class PlutoManager {
 
   constructor(
     private port: number = 1234,
-    private showWarningMessage: <T extends string>(
-      message: string,
-      ...items: T[]
-    ) => Thenable<T | undefined>,
+    private logger: PlutoManagerLogger,
     serverUrl?: string
   ) {
     if (serverUrl) {
       this.serverUrl = serverUrl;
       this.usingCustomServerUrl = true;
     } else {
-      this.serverUrl = `http://localhost:${port}`;
+      this.serverUrl = `http://localhost:${this.port}`;
     }
 
-    this.taskManager = new PlutoServerTaskManager(port);
+    this.taskManager = new PlutoServerTaskManager(this.port);
 
     // Register callback to reset state when server task stops
     this.taskManager.onStop(() => {
@@ -103,18 +114,20 @@ export class PlutoManager {
 
     // Show warning to user if server stopped unexpectedly
     if (this.taskManager.isRunning() === false) {
-      this.showWarningMessage(
-        "Pluto server stopped unexpectedly. Click 'Restart' to start it again.",
-        "Restart"
-      ).then((choice) => {
-        if (choice === "Restart") {
-          this.start().catch((error) => {
-            this.showWarningMessage(
-              `Failed to restart Pluto server: ${error.message}`
-            );
-          });
-        }
-      });
+      this.logger
+        .showErrorMessage(
+          "Pluto server stopped unexpectedly. Click 'Restart' to start it again.",
+          "Restart"
+        )
+        .then((choice) => {
+          if (choice === "Restart") {
+            this.start().catch((error) => {
+              this.logger.showErrorMessage(
+                `Failed to restart Pluto server: ${error.message}`
+              );
+            });
+          }
+        });
     }
   }
 
@@ -314,13 +327,6 @@ export class PlutoManager {
   }
 
   /**
-   * Restart the notebook kernel
-   */
-  async restartNotebook(worker: Worker): Promise<void> {
-    await worker.restart();
-  }
-
-  /**
    * Get the server URL
    */
   getServerUrl(): string {
@@ -335,11 +341,12 @@ export class PlutoManager {
     const worker = this.workers.get(notebookPath);
 
     if (worker) {
-      await worker.shutdown();
       this.workers.delete(notebookPath);
 
       // Emit notebook closed event
       this.emit("notebookClosed", notebookPath);
+      await worker.shutdown();
+      worker.close();
     }
   }
 
@@ -396,6 +403,33 @@ export class PlutoManager {
       this.taskManager.stop().catch(() => {
         // Ignore errors during dispose
       });
+    }
+  }
+
+  public async restartNotebook(notebookPath?: string) {
+    try {
+      // Close existing worker
+      for (const notebook of this.getOpenNotebooks()) {
+        if (!notebookPath || notebook.path === notebookPath) {
+          this.closeNotebook(notebook.path);
+
+          // Wait a bit for cleanup
+          await new Promise((resolve) => setTimeout(resolve, 100));
+
+          // Recreate worker
+          await this.getWorker(notebook.path);
+
+          this.logger.showInfoMessage(
+            `Reconnected to notebook: ${notebook.path.split("/").pop()}`
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.showErrorMessage(
+        `Failed to reconnect notebook: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 }

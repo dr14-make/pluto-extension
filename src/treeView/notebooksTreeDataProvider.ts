@@ -21,7 +21,7 @@ interface NotebookTreeItemBase extends vscode.TreeItem {
 /**
  * Tree item for notebook
  */
-class PlutoNotebookTreeItem
+export class PlutoNotebookTreeItem
   extends vscode.TreeItem
   implements NotebookTreeItemBase
 {

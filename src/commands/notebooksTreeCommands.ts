@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
-import { PlutoManager } from "../plutoManager.ts";
+import type { PlutoManager } from "../plutoManager.ts";
+import type { PlutoNotebookTreeItem } from "../treeView/notebooksTreeDataProvider.ts";
 
 async function revealNotebook(notebookPath: string) {
   const uri = vscode.Uri.file(notebookPath);
@@ -95,27 +96,8 @@ export function registerReconnectCommand(
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "pluto-notebook.reconnectNotebook",
-      async (notebookPath: string) => {
-        try {
-          // Close existing worker
-          plutoManager.closeNotebook(notebookPath);
-
-          // Wait a bit for cleanup
-          await new Promise((resolve) => setTimeout(resolve, 100));
-
-          // Recreate worker
-          await plutoManager.getWorker(notebookPath);
-
-          vscode.window.showInformationMessage(
-            `Reconnected to notebook: ${notebookPath.split("/").pop()}`
-          );
-        } catch (error) {
-          vscode.window.showErrorMessage(
-            `Failed to reconnect notebook: ${
-              error instanceof Error ? error.message : String(error)
-            }`
-          );
-        }
+      async (notebook: PlutoNotebookTreeItem) => {
+        plutoManager.restartNotebook(notebook.notebookPath);
       }
     )
   );

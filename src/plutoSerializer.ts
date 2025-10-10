@@ -1,6 +1,9 @@
 import { CellInputData, NotebookData } from "@plutojl/rainbow";
 import { parse, serialize } from "./rainbowAdapter.ts";
 import * as vscode from "vscode";
+import { formatCellOutput } from "./serializer.ts";
+import { validate } from "uuid";
+import { v4 as uuidv4 } from "uuid";
 
 /**
  * Pure functions for Pluto notebook parsing and serialization
@@ -21,9 +24,13 @@ export function createVsCodeCellFromPlutoCell(
   notebookData: NotebookData,
   plutoCellId: string
 ) {
+  // Validate UUID
   const cellInput = notebookData.cell_inputs[plutoCellId];
-  if (!cellInput) {
-    return undefined;
+
+  if (!validate(plutoCellId) || !cellInput) {
+    throw new Error(
+      `Invalid or missing cell ID: ${plutoCellId} fix in the code`
+    );
   }
 
   let code = cellInput.code || "";
@@ -34,7 +41,7 @@ export function createVsCodeCellFromPlutoCell(
   const isMarkdown = isVSCodeMarkdown && hasMarkdownWrapper;
 
   // Extract markdown content from md"""...""" wrapper
-  if (hasMarkdownWrapper) {
+  if (isMarkdown) {
     code = extractMarkdownContent(code);
   }
 
@@ -43,7 +50,11 @@ export function createVsCodeCellFromPlutoCell(
     code,
     isMarkdown ? "markdown" : "julia"
   );
-
+  const results = notebookData.cell_results[plutoCellId] || null;
+  if (results !== null) {
+    // Add output if available
+    cellData.outputs = [formatCellOutput(results)];
+  }
   cellData.metadata = {
     pluto_cell_id: plutoCellId,
     ...cellInput.metadata,
@@ -66,7 +77,9 @@ export function parsePlutoNotebook(content: string): ParsedNotebook {
       pluto_version: "",
     };
   }
-  for (const cellId of notebookData.cell_order) {
+  const cell_order =
+    notebookData.cell_order || Object.keys(notebookData.cell_inputs);
+  for (const cellId of cell_order) {
     const cell = createVsCodeCellFromPlutoCell(notebookData, cellId);
     if (!cell) {
       continue;
@@ -175,11 +188,7 @@ export function isMarkdownCell(code: string): boolean {
  * Generate a UUID v4
  */
 export function generateCellId(): string {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+  return uuidv4();
 }
 
 /**
@@ -187,22 +196,4 @@ export function generateCellId(): string {
  */
 export function generateNotebookId(): string {
   return generateCellId();
-}
-
-/**
- * Validate Pluto notebook format
- */
-export function isValidPlutoNotebook(content: string): boolean {
-  return (
-    content.includes("### A Pluto.jl notebook ###") && content.includes("╔═╡")
-  );
-}
-
-/**
- * Extract cell count from notebook content
- */
-export function getCellCount(content: string): number {
-  const cellMarkerRegex = /# ╔═╡ [a-f0-9-]+\n/g;
-  const matches = content.match(cellMarkerRegex);
-  return matches ? matches.length : 0;
 }

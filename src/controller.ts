@@ -480,6 +480,8 @@ export class PlutoNotebookController {
 
             // Subscribe to updates from this worker
             worker.onUpdate(this.onPlutoNotebookUpdate(notebook));
+
+            // Fetch existing cell results from Pluto server
           }
         } catch (error) {
           const errorMessage =

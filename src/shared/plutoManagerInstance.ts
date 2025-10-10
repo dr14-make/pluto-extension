@@ -1,5 +1,5 @@
 import "@plutojl/rainbow/node-polyfill";
-import { PlutoManager } from "../plutoManager.ts";
+import { PlutoManager, PlutoManagerLogger } from "../plutoManager.ts";
 
 /**
  * Shared PlutoManager instance that can be used by both the extension and MCP server
@@ -9,14 +9,11 @@ let sharedPlutoManager: PlutoManager | undefined;
 
 export function getSharedPlutoManager(
   port: number,
-  showWarningMessage: <T extends string>(
-    message: string,
-    ...items: T[]
-  ) => Thenable<T | undefined>,
+  logger: PlutoManagerLogger,
   serverUrl?: string
 ): PlutoManager {
   if (!sharedPlutoManager) {
-    sharedPlutoManager = new PlutoManager(port, showWarningMessage, serverUrl);
+    sharedPlutoManager = new PlutoManager(port, logger, serverUrl);
   }
   return sharedPlutoManager;
 }

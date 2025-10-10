@@ -32,7 +32,11 @@ export async function activate(context: vscode.ExtensionContext) {
   // Initialize shared Pluto Manager
   const plutoManager = getSharedPlutoManager(
     plutoPort,
-    vscode.window.showWarningMessage,
+    {
+      showWarningMessage: vscode.window.showWarningMessage,
+      showErrorMessage: vscode.window.showErrorMessage,
+      showInfoMessage: vscode.window.showInformationMessage,
+    },
     serverUrl || undefined
   );
   context.subscriptions.push(plutoManager);

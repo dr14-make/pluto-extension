@@ -16,6 +16,7 @@ export * from "./mcpServerCommands.ts";
 export * from "./mcpConfigCommands.ts";
 export * from "./terminalCommands.ts";
 export * from "./notebooksTreeCommands.ts";
+export * from "./viewToggleCommands.ts";
 // Import for registerAllCommands
 import {
   registerStartServerCommand,
@@ -42,6 +43,7 @@ import {
   registerReconnectCommand,
 } from "./notebooksTreeCommands.ts";
 import { registerCreateTerminalCommand } from "./terminalCommands.ts";
+import { registerToggleViewCommand } from "./viewToggleCommands.ts";
 
 /**
  * Register all commands at once
@@ -77,4 +79,7 @@ export function registerAllCommands(
   registerFocusCellCommand(context);
   registerRevealNotebookCommand(context);
   registerReconnectCommand(context, plutoManager);
+
+  // Register View Toggle commands
+  registerToggleViewCommand(context);
 }
