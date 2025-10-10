@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { isDefined, isNotDefined } from "./helpers.ts";
+import { isDefined } from "./helpers.ts";
 
 /**
  * Parse Julia executable path to extract command and arguments

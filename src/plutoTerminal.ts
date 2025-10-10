@@ -434,7 +434,7 @@ using InteractiveUtils
     const checkInterval = 500; // Check every 500ms
     const startTime = Date.now();
 
-    while (worker.isIdle()) {
+    while (!worker.isIdle()) {
       // Check if we've exceeded max wait time
       if (Date.now() - startTime > maxWaitTime) {
         throw new Error(
