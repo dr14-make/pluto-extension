@@ -77,7 +77,7 @@ export class PlutoServerTaskManager {
 
     // Get Julia settings
     const juliaConfig = vscode.workspace.getConfiguration("julia");
-    const executablePath = juliaConfig.get<string>("executablePath") ?? "julia";
+    const executablePath = juliaConfig.get<string>("executablePath") || "julia";
     const environmentPath = juliaConfig.get<string>("environmentPath") ?? "";
 
     // Parse Julia executable to handle arguments like --sysimage
@@ -200,7 +200,7 @@ export class PlutoServerTaskManager {
         });
 
         // If we get any response (even error), server is running
-        if (isNotDefined(response)) {
+        if (isDefined(response)) {
           return;
         }
       } catch {
