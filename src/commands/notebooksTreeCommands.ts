@@ -12,7 +12,9 @@ async function revealNotebook(notebookPath: string) {
 /**
  * Register command to open notebook from tree
  */
-export function revealNotebookCommand(context: vscode.ExtensionContext): void {
+export function registerRevealNotebookCommand(
+  context: vscode.ExtensionContext
+): void {
   context.subscriptions.push(
     vscode.commands.registerCommand(
       "pluto-notebook.openNotebookFromTree",

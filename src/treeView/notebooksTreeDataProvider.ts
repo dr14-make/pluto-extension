@@ -100,8 +100,7 @@ class PlutoCellTreeItem
   ) {
     super(cellId, vscode.TreeItemCollapsibleState.None);
 
-    // TODO Panagiotis to fix
-    const cellResults = (cellData as any)?.result;
+    const cellResults = cellData?.result;
     const code = cellData?.input?.code || "";
 
     // Assign icon directly based on cell status
@@ -156,7 +155,6 @@ export class NotebooksTreeDataProvider
    * Refresh the tree view
    */
   refresh = (): void => {
-    console.log("[TreeView] Refreshing tree view");
     this._onDidChangeTreeData.fire();
   };
 
@@ -197,8 +195,6 @@ export class NotebooksTreeDataProvider
   private async getNotebooks(): Promise<PlutoNotebookTreeItem[]> {
     const notebooks = this.plutoManager.getOpenNotebooks();
 
-    console.log(`[TreeView] Found ${notebooks.length} open notebooks`);
-
     if (notebooks.length === 0) {
       return [];
     }
@@ -225,7 +221,6 @@ export class NotebooksTreeDataProvider
           error
         );
 
-        console.log(`[TreeView] Created notebook item: ${item.label}`);
         return item;
       })
     );
@@ -236,11 +231,8 @@ export class NotebooksTreeDataProvider
    */
   private async getCells(notebookPath: string): Promise<PlutoCellTreeItem[]> {
     try {
-      console.log(`[TreeView] Getting cells for ${notebookPath}`);
-
       const worker = await this.plutoManager.getWorker(notebookPath);
       if (!worker) {
-        console.log(`[TreeView] No worker found for ${notebookPath}`);
         return [];
       }
 
@@ -248,30 +240,23 @@ export class NotebooksTreeDataProvider
       const notebookData: NotebookData = worker.getState();
       const cellOrder = notebookData.cell_order;
       if (!cellOrder || !Array.isArray(cellOrder)) {
-        console.log(`[TreeView] Invalid cell_order, returning empty`);
         return [];
       }
 
       if (cellOrder.length === 0) {
-        console.log(`[TreeView] No cells in cell_order`);
         return [];
       }
 
-      console.log(`[TreeView] Found ${cellOrder.length} cells`);
       const cells: PlutoCellTreeItem[] = [];
 
       for (const cellId of cellOrder) {
         try {
           const cellData = worker.getSnippet(cellId);
           if (!cellData) {
-            console.log(`[TreeView] No cell data for ${cellId}`);
             continue;
           }
-
           const item = new PlutoCellTreeItem(notebookPath, cellId, cellData);
           cells.push(item);
-
-          console.log(`[TreeView] Added cell: ${cellId}`);
         } catch (cellError) {
           console.error(
             `[TreeView] Error processing cell ${cellId}:`,
@@ -280,7 +265,6 @@ export class NotebooksTreeDataProvider
         }
       }
 
-      console.log(`[TreeView] Returning ${cells.length} cells`);
       return cells;
     } catch (error) {
       console.error(

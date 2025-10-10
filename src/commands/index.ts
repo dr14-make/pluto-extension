@@ -38,7 +38,7 @@ import {
 
 import {
   registerFocusCellCommand,
-  revealNotebookCommand,
+  registerRevealNotebookCommand,
   registerReconnectCommand,
 } from "./notebooksTreeCommands.ts";
 import { registerCreateTerminalCommand } from "./terminalCommands.ts";
@@ -75,6 +75,6 @@ export function registerAllCommands(
   // Register Terminal commands
   registerCreateTerminalCommand(context, plutoManager);
   registerFocusCellCommand(context);
-  revealNotebookCommand(context);
+  registerRevealNotebookCommand(context);
   registerReconnectCommand(context, plutoManager);
 }

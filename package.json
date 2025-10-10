@@ -160,6 +160,11 @@
         "command": "pluto-notebook.reconnectNotebook",
         "title": "🔌 Pluto: Reconnect Notebook",
         "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "pluto-notebook.openNotebookFromTree",
+        "title": "📂 Pluto: Open Notebook from Tree",
+        "icon": "$(notebook)"
       }
     ],
     "menus": {
