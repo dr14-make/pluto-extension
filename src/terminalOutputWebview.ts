@@ -18,7 +18,8 @@ export class TerminalOutputWebviewProvider {
     title = "Terminal Output"
   ): void {
     const outputId = `terminal-output-${this.currentOutputId++}`;
-    const columnToShowIn = vscode.window.activeTextEditor?.viewColumn ?? undefined;
+    const columnToShowIn =
+      vscode.window.activeTextEditor?.viewColumn ?? undefined;
 
     // Check if we already have a panel
     let panel = this.panels.get(outputId);

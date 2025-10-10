@@ -115,12 +115,12 @@ class PlutoCellTreeItem
       keys.length > 0
         ? keys.join(", ")
         : code === ""
-        ? "(empty)"
-        : cellResult?.errored || cellResult?.queued || cellResult?.running
-        ? ""
-        : cellResult?.output?.mime
-        ? "(result)"
-        : "";
+          ? "(empty)"
+          : cellResult?.errored || cellResult?.queued || cellResult?.running
+            ? ""
+            : cellResult?.output?.mime
+              ? "(result)"
+              : "";
     const mimeIcon: Record<string, string> = {
       "text/plain": "📰",
       "text/html": "📊",

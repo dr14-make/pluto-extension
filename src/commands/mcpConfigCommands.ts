@@ -48,7 +48,6 @@ async function createProjectMCPConfig(
   const configPath = vscode.Uri.joinPath(workspaceFolder.uri, configFileName);
 
   try {
-
     // Try to read existing config
     let existingConfig: any = {};
 
@@ -67,8 +66,9 @@ async function createProjectMCPConfig(
 
     if (configType === "claude") {
       existingConfig.mcpServers ??= {};
-      existingConfig.mcpServers["pluto-notebook"] = (newConfig as any)
-        .mcpServers["pluto-notebook"];
+      existingConfig.mcpServers["pluto-notebook"] = (
+        newConfig as any
+      ).mcpServers["pluto-notebook"];
     } else {
       // Copilot config structure
       existingConfig.servers ??= {};

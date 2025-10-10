@@ -25,7 +25,10 @@ export class NotebookCellOutputItem {
     );
   }
 
-  constructor(public data: string, public mime: string) {}
+  constructor(
+    public data: string,
+    public mime: string
+  ) {}
 }
 
 export class NotebookCellOutput {
