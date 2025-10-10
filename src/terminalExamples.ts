@@ -105,7 +105,7 @@ This is a **Markdown** output test with various features:
 ## Code Block
 \`\`\`julia
 function hello(name)
-    println("Hello, \$name!")
+    println("Hello, $(name)!")
 end
 \`\`\`
 

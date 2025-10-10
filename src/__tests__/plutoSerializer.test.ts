@@ -182,8 +182,6 @@ describe("Pluto Serializer Functions", () => {
 
       expect(serialized).toContain("x = 1");
       // Should have generated a UUID
-      const _uuidRegex =
-        /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/;
       expect(validate(serialized)).toBeTruthy();
     });
   });

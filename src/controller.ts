@@ -48,8 +48,7 @@ export class PlutoNotebookController {
 
   private executeHandler = (
     cells: vscode.NotebookCell[],
-    notebook: vscode.NotebookDocument,
-    _controller: vscode.NotebookController
+    notebook: vscode.NotebookDocument
   ): void | Thenable<void> => {
     for (const cell of cells) {
       void this._doExecution(cell, notebook);
@@ -126,7 +125,7 @@ export class PlutoNotebookController {
 
     // Placeholder: Handle different message types from renderer
     switch (message.type) {
-      case "bond":
+      case "bond": {
         const worker = await this.plutoManager.getWorker(
           editor.notebook.uri.fsPath
         );
@@ -141,6 +140,7 @@ export class PlutoNotebookController {
           cell_id: message.cell_id,
         });
         break;
+      }
       default:
         this.outputChannel.appendLine(`[UNKNOWN MESSAGE TYPE] ${message.type}`);
     }
@@ -308,7 +308,8 @@ export class PlutoNotebookController {
     _plutoNotebook: NotebookData
   ): Promise<void> {
     this.outputChannel.appendLine(`  Reorder happens here`);
-
+    void _notebook;
+    void _plutoNotebook;
     // Replca them in a bulk? drawbacks ???
     // A cell can be removed, added or reordered
 
@@ -403,7 +404,7 @@ export class PlutoNotebookController {
           const path = patch.path;
           const [action, ...rest] = path;
           switch (action) {
-            case "bonds":
+            case "bonds": {
               // TODO here we do bound send to the renderers
               const ref = rest[0];
               const value =
@@ -412,7 +413,8 @@ export class PlutoNotebookController {
                 `[BONDS] ref = ${ref} value = ${value} action ${patch.op}`
               );
               break;
-            case "cell_input":
+            }
+            case "cell_input": {
               if (rest[1] === "code" && patch.op === "replace") {
                 // TODO here we need to update the code for the cell
               }
@@ -423,6 +425,7 @@ export class PlutoNotebookController {
                 }`
               );
               break;
+            }
             case "cell_results":
               this._handleCellPatch(notebook, patch, fullNotebookState);
               break;
@@ -442,7 +445,8 @@ export class PlutoNotebookController {
               this.outputChannel.appendLine(
                 `[LogInternal] Internal status updated: /${path.join("/")}`
               );
-            case "cell_order":
+              break;
+            case "cell_order": {
               if (patch.op === "replace") {
                 // A cell can be removed, added or reordered
                 void this._handleCellReorder(notebook, fullNotebookState);
@@ -454,6 +458,7 @@ export class PlutoNotebookController {
                 );
               }
               break;
+            }
             case "last_save_time":
               break;
             default:

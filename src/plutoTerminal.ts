@@ -43,9 +43,8 @@ export class PlutoTerminalProvider implements vscode.Pseudoterminal {
   /**
    * Called when the terminal is opened
    */
-  public async open(
-    _initialDimensions: vscode.TerminalDimensions | undefined
-  ): Promise<void> {
+  public async open() // _initialDimensions: vscode.TerminalDimensions | undefined
+  : Promise<void> {
     this.writeWelcomeMessage();
 
     // Try to bind to an open notebook

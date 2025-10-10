@@ -154,11 +154,7 @@ export class PlutoManager {
       return;
     }
 
-    try {
-      this.host = new Host(this.serverUrl);
-    } catch (error) {
-      throw error;
-    }
+    this.host = new Host(this.serverUrl);
   }
 
   /**
@@ -177,19 +173,15 @@ export class PlutoManager {
       return;
     }
 
-    try {
-      await this.taskManager.start();
-      await this.taskManager.waitForReady();
-      await this.connect();
+    await this.taskManager.start();
+    await this.taskManager.waitForReady();
+    await this.connect();
 
-      // Emit server state changed event
-      this.emit("serverStateChanged");
+    // Emit server state changed event
+    this.emit("serverStateChanged");
 
-      // Recreate workers for notebooks that were open before server stopped
-      await this.recreateWorkers();
-    } catch (error) {
-      throw error;
-    }
+    // Recreate workers for notebooks that were open before server stopped
+    await this.recreateWorkers();
   }
 
   /**
@@ -289,19 +281,15 @@ export class PlutoManager {
     cellId: string,
     code: string
   ): Promise<CellResultData | null> {
-    try {
-      // Update existing cell code and run it
-      await worker.updateSnippetCode(cellId, code, true);
+    // Update existing cell code and run it
+    await worker.updateSnippetCode(cellId, code, true);
 
-      // Wait for execution to complete
-      // await worker.wait(true);
+    // Wait for execution to complete
+    // await worker.wait(true);
 
-      // Get cell result
-      const cellData = worker.getSnippet(cellId);
-      return cellData?.result ?? null;
-    } catch (error) {
-      throw error;
-    }
+    // Get cell result
+    const cellData = worker.getSnippet(cellId);
+    return cellData?.result ?? null;
   }
 
   /**
@@ -376,17 +364,13 @@ export class PlutoManager {
     worker: Worker,
     code: string
   ): Promise<CellResultData> {
-    try {
-      // Execute code at index 0 (creates a temporary cell)
-      const result = await worker.waitSnippet(0, code);
+    // Execute code at index 0 (creates a temporary cell)
+    const result = await worker.waitSnippet(0, code);
 
-      // Delete the cell immediately after execution
-      await worker.deleteSnippets([result.cell_id]);
+    // Delete the cell immediately after execution
+    await worker.deleteSnippets([result.cell_id]);
 
-      return result;
-    } catch (error) {
-      throw error;
-    }
+    return result;
   }
 
   /**

@@ -16,8 +16,8 @@ export function formatCellOutput(
 
 export class PlutoNotebookSerializer implements vscode.NotebookSerializer {
   public async deserializeNotebook(
-    content: Uint8Array,
-    __token: vscode.CancellationToken
+    content: Uint8Array
+    // __token: vscode.CancellationToken
   ): Promise<vscode.NotebookData> {
     const contents = new TextDecoder().decode(content);
 
@@ -52,8 +52,8 @@ export class PlutoNotebookSerializer implements vscode.NotebookSerializer {
   }
 
   public async serializeNotebook(
-    data: vscode.NotebookData,
-    __token: vscode.CancellationToken
+    data: vscode.NotebookData
+    // __token: vscode.CancellationToken
   ): Promise<Uint8Array> {
     try {
       const serialized = serializePlutoNotebook(

@@ -108,9 +108,8 @@ export async function activate(
 
   context.subscriptions.push(
     vscode.window.registerTerminalProfileProvider("pluto-notebook.terminal", {
-      provideTerminalProfile(
-        _token: vscode.CancellationToken
-      ): vscode.ProviderResult<vscode.TerminalProfile> {
+      provideTerminalProfile() // _token: vscode.CancellationToken
+      : vscode.ProviderResult<vscode.TerminalProfile> {
         const pty = new PlutoTerminalProvider(
           plutoManager,
           terminalOutputChannel,
