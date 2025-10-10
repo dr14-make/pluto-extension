@@ -78,7 +78,7 @@ jobs:
         run: npm ci
 
       - name: Run unit tests
-        run: npm test:unit
+        run: npm run test:unit
       # //TODO: figureout how to run these in CI and what actually to test there  
       # - name: Run vscode tests
       #   run: npm test:unit
