@@ -297,8 +297,7 @@ export class PlutoManager {
 
       // Get cell result
       const cellData = worker.getSnippet(cellId);
-      const result = cellData?.result || null;
-      return result;
+      return cellData?.result ?? null;
     } catch (error) {
       throw error;
     }
