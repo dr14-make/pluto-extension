@@ -85,53 +85,128 @@
         }
       ]
     },
+    "views": {
+      "explorer": [
+        {
+          "id": "plutoNotebooks",
+          "name": "Pluto Notebooks",
+          "icon": "$(notebook)",
+          "contextualTitle": "Pluto Notebooks"
+        }
+      ]
+    },
     "commands": [
       {
-        "command": "pluto-notebook.helloWorld",
-        "title": "Hello World"
-      },
-      {
         "command": "pluto-notebook.startServer",
-        "title": "Pluto: Start Server"
+        "title": "▶️ Pluto: Start Server",
+        "icon": "$(play)"
       },
       {
         "command": "pluto-notebook.stopServer",
-        "title": "Pluto: Stop Server"
+        "title": "⏹️ Pluto: Stop Server",
+        "icon": "$(debug-stop)"
       },
       {
         "command": "pluto-notebook.restartServer",
-        "title": "Pluto: Restart Server"
+        "title": "🔄 Pluto: Restart Server",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "pluto-notebook.toggleServer",
+        "title": "🔀 Pluto: Toggle Server (Start/Stop)",
+        "icon": "$(debug-alt)"
       },
       {
         "command": "pluto-notebook.startMCPServer",
-        "title": "Pluto: Start MCP Server"
+        "title": "🚀 Pluto: Start MCP Server",
+        "icon": "$(server-process)"
       },
       {
         "command": "pluto-notebook.stopMCPServer",
-        "title": "Pluto: Stop MCP Server"
+        "title": "⏹️ Pluto: Stop MCP Server",
+        "icon": "$(debug-stop)"
       },
       {
         "command": "pluto-notebook.restartMCPServer",
-        "title": "Pluto: Restart MCP Server"
+        "title": "🔄 Pluto: Restart MCP Server",
+        "icon": "$(debug-restart)"
       },
       {
         "command": "pluto-notebook.createProjectMCPConfig",
-        "title": "Pluto: Create MCP Config (Claude or Copilot)"
+        "title": "⚙️ Pluto: Create MCP Config (Claude or Copilot)",
+        "icon": "$(gear)"
       },
       {
         "command": "pluto-notebook.getMCPHttpUrl",
-        "title": "Pluto: Get MCP HTTP Server URL"
+        "title": "🔗 Pluto: Get MCP HTTP Server URL",
+        "icon": "$(link)"
       },
       {
         "command": "pluto-notebook.openInBrowser",
-        "title": "Pluto: Open Notebook in Browser"
+        "title": "🌐 Pluto: Open Notebook in Browser",
+        "icon": "$(globe)"
       },
       {
         "command": "pluto-notebook.createTerminal",
-        "title": "Pluto: Create Terminal",
+        "title": "💻 Pluto: Create Terminal",
         "icon": "$(terminal)"
+      },
+      {
+        "command": "pluto-notebook.refreshNotebooks",
+        "title": "🔄 Pluto: Refresh Notebooks Tree",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "pluto-notebook.reconnectNotebook",
+        "title": "🔌 Pluto: Reconnect Notebook",
+        "icon": "$(debug-disconnect)"
+      },
+      {
+        "command": "pluto-notebook.openNotebookFromTree",
+        "title": "📂 Pluto: Open Notebook from Tree",
+        "icon": "$(notebook)"
+      },
+      {
+        "command": "pluto-notebook.toggleView",
+        "title": "🔄 Pluto: Toggle Code/Notebook View",
+        "icon": "$(split-vertical)"
       }
-    ]
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "pluto-notebook.toggleView",
+          "when": "resourceExtname == .jl && (resourceFilename =~ /\\.pluto\\.jl$/ || resourceFilename =~ /\\.dyad\\.jl$/)",
+          "group": "navigation"
+        }
+      ],
+      "notebook/toolbar": [
+        {
+          "command": "pluto-notebook.toggleView",
+          "when": "notebookType == pluto-notebook",
+          "group": "navigation"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "pluto-notebook.refreshNotebooks",
+          "when": "view == plutoNotebooks",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "pluto-notebook.reconnectNotebook",
+          "when": "view == plutoNotebooks && viewItem == plutoNotebook",
+          "group": "inline"
+        },
+        {
+          "command": "pluto-notebook.openNotebookFromTree",
+          "when": "view == plutoNotebooks && viewItem == plutoNotebook",
+          "group": "navigation"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run check-types && npm run lint && node esbuild.js --production",
@@ -176,6 +251,7 @@
     "@modelcontextprotocol/sdk": "^1.19.1",
     "@plutojl/rainbow": "^0.6.10",
     "jsdom": "^27.0.0",
+    "uuid": "^13.0.0",
     "zod": "^3.25.76"
   }
 }

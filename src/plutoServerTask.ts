@@ -1,6 +1,22 @@
 import * as vscode from "vscode";
 
 /**
+ * Parse Julia executable path to extract command and arguments
+ */
+function parseJuliaExecutable(executablePath: string): {
+  command: string;
+  args: string[];
+} {
+  // Split by spaces but respect quoted strings
+  const parts = executablePath.match(/(?:[^\s"]+|"[^"]*")+/g) || [
+    executablePath,
+  ];
+  const command = parts[0].replace(/"/g, ""); // Remove quotes from command
+  const args = parts.slice(1).map((arg) => arg.replace(/"/g, "")); // Remove quotes from args
+  return { command, args };
+}
+
+/**
  * Manages Pluto server as a VSCode task with terminal integration
  */
 export class PlutoServerTaskManager {
@@ -58,6 +74,31 @@ export class PlutoServerTaskManager {
       this.serverReadyResolve = resolve;
     });
 
+    // Get Julia settings
+    const juliaConfig = vscode.workspace.getConfiguration("julia");
+    const executablePath = juliaConfig.get<string>("executablePath") || "julia";
+    const environmentPath = juliaConfig.get<string>("environmentPath") || "";
+
+    // Parse Julia executable to handle arguments like --sysimage
+    const { command, args: baseArgs } = parseJuliaExecutable(executablePath);
+
+    // Build Julia command arguments
+    const juliaArgs = [
+      ...baseArgs,
+      "-e",
+      `using Pluto; Pluto.run(port=${this.port}; require_secret_for_open_links=false, require_secret_for_access=false, launch_browser=false)`,
+    ];
+
+    console.log(
+      `[PlutoServerTask] Resolved command: ${command} ${juliaArgs.join(" ")}`
+    );
+
+    // Build environment variables
+    const env: { [key: string]: string } = {};
+    if (environmentPath) {
+      env.JULIA_LOAD_PATH = environmentPath;
+    }
+
     // Create the task definition
     const taskDefinition: vscode.TaskDefinition = {
       type: "pluto-server",
@@ -65,10 +106,9 @@ export class PlutoServerTaskManager {
     };
 
     // Create shell execution for Julia command
-    const shellExecution = new vscode.ShellExecution("julia", [
-      "-e",
-      `using Pluto; Pluto.run(port=${this.port}; require_secret_for_open_links=false, require_secret_for_access=false, launch_browser=false)`,
-    ]);
+    const shellExecution = new vscode.ShellExecution(command, juliaArgs, {
+      env,
+    });
 
     // Create the task
     const task = new vscode.Task(

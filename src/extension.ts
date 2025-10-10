@@ -13,6 +13,8 @@ import {
   cleanupMCPServer,
 } from "./mcp-server-http.ts";
 import { PlutoTerminalProvider } from "./plutoTerminal.ts";
+import { PlutoStatusBar } from "./statusBar.ts";
+import { registerNotebooksTreeView } from "./treeView/notebooksTreeView.ts";
 
 export async function activate(context: vscode.ExtensionContext) {
   // Create controller output channel
@@ -30,7 +32,11 @@ export async function activate(context: vscode.ExtensionContext) {
   // Initialize shared Pluto Manager
   const plutoManager = getSharedPlutoManager(
     plutoPort,
-    vscode.window.showWarningMessage,
+    {
+      showWarningMessage: vscode.window.showWarningMessage,
+      showErrorMessage: vscode.window.showErrorMessage,
+      showInfoMessage: vscode.window.showInformationMessage,
+    },
     serverUrl || undefined
   );
   context.subscriptions.push(plutoManager);
@@ -85,6 +91,13 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Register all commands
   registerAllCommands(context, plutoManager);
+
+  // Create and register status bar
+  const statusBar = new PlutoStatusBar(plutoManager);
+  context.subscriptions.push(statusBar);
+
+  // Register notebooks tree view
+  registerNotebooksTreeView(context, plutoManager);
 
   // Register terminal profile provider
   const terminalOutputChannel =

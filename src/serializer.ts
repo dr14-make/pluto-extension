@@ -22,7 +22,7 @@ export class PlutoNotebookSerializer implements vscode.NotebookSerializer {
     const contents = new TextDecoder().decode(content);
 
     try {
-      const parsed = await parsePlutoNotebook(contents);
+      const parsed = parsePlutoNotebook(contents);
 
       // Create notebook data with metadata
       const notebookData = new vscode.NotebookData(parsed.cells);
@@ -34,13 +34,20 @@ export class PlutoNotebookSerializer implements vscode.NotebookSerializer {
       return notebookData;
     } catch (error) {
       // Fallback: treat as single code cell if parsing fails
-      return new vscode.NotebookData([
-        new vscode.NotebookCellData(
-          vscode.NotebookCellKind.Code,
-          contents,
-          "julia"
-        ),
-      ]);
+      const cell = new vscode.NotebookCellData(
+        vscode.NotebookCellKind.Code,
+        contents,
+        "julia"
+      );
+      cell.outputs = [
+        new vscode.NotebookCellOutput([
+          vscode.NotebookCellOutputItem.text(
+            error instanceof Error ? error.message : String(error),
+            "text/plain"
+          ),
+        ]),
+      ];
+      return new vscode.NotebookData([cell]);
     }
   }
 

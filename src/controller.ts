@@ -250,7 +250,9 @@ export class PlutoNotebookController {
 
     // 1. Update Cell Execution Status (queued, running)
     const isStarting = patch.value === true && segment2 === "running";
-
+    if (segment2 === "running") {
+      this.plutoManager.emitCellUpdated(notebook.uri.fsPath, cellId);
+    }
     if (isStarting) {
       // Start execution
       const execution = this.startExecution(cellId, notebook);
@@ -478,6 +480,8 @@ export class PlutoNotebookController {
 
             // Subscribe to updates from this worker
             worker.onUpdate(this.onPlutoNotebookUpdate(notebook));
+
+            // Fetch existing cell results from Pluto server
           }
         } catch (error) {
           const errorMessage =
