@@ -1,37 +1,40 @@
 import * as vscode from "vscode";
-import { PlutoManager } from "./plutoManager.ts";
+import type { PlutoManager } from "./plutoManager.ts";
 import { TerminalOutputWebviewProvider } from "./terminalOutputWebview.ts";
 import {
   getExampleCommand,
   isExampleCommand,
   getExampleCommandsHelp,
 } from "./terminalExamples.ts";
+import { isDefined, isNotDefined } from "./helpers.ts";
+import type { Worker } from "@plutojl/rainbow";
 
 /**
  * Pluto Terminal - An interactive terminal for executing Julia code in Pluto notebooks
  * Uses executeCodeEphemeral to run code without creating persistent cells
  */
 export class PlutoTerminalProvider implements vscode.Pseudoterminal {
-  private writeEmitter = new vscode.EventEmitter<string>();
-  onDidWrite: vscode.Event<string> = this.writeEmitter.event;
+  private readonly writeEmitter = new vscode.EventEmitter<string>();
+  public readonly onDidWrite: vscode.Event<string> = this.writeEmitter.event;
 
-  private closeEmitter = new vscode.EventEmitter<number | void>();
-  onDidClose?: vscode.Event<number | void> = this.closeEmitter.event;
+  private readonly closeEmitter = new vscode.EventEmitter<number | void>();
+  public readonly onDidClose?: vscode.Event<number | void> =
+    this.closeEmitter.event;
 
   private notebookPath?: string;
   private inputBuffer = "";
   private cursorPosition = 0; // Position in the input buffer
   private isExecuting = false;
-  private context?: vscode.ExtensionContext;
+  private readonly context?: vscode.ExtensionContext;
 
   // Command history
-  private commandHistory: string[] = [];
+  private readonly commandHistory: string[] = [];
   private historyIndex = -1;
   private currentInput = "";
 
   constructor(
-    private plutoManager: PlutoManager,
-    private outputChannel: vscode.OutputChannel,
+    private readonly plutoManager: PlutoManager,
+    private readonly outputChannel: vscode.OutputChannel,
     context?: vscode.ExtensionContext
   ) {
     this.context = context;
@@ -40,9 +43,8 @@ export class PlutoTerminalProvider implements vscode.Pseudoterminal {
   /**
    * Called when the terminal is opened
    */
-  async open(
-    initialDimensions: vscode.TerminalDimensions | undefined
-  ): Promise<void> {
+  public async open() // _initialDimensions: vscode.TerminalDimensions | undefined
+  : Promise<void> {
     this.writeWelcomeMessage();
 
     // Try to bind to an open notebook
@@ -179,7 +181,7 @@ using InteractiveUtils
         canSelectMany: false,
       });
 
-      if (uris && uris[0]) {
+      if (isDefined(uris?.[0])) {
         const doc = await vscode.workspace.openNotebookDocument(uris[0]);
         await vscode.window.showNotebookDocument(doc);
 
@@ -203,7 +205,7 @@ using InteractiveUtils
   }
 
   private getNotebookNameFromPath(path: string): string {
-    return path.split("/").pop() || path;
+    return path.split("/").pop() ?? path;
   }
 
   /**
@@ -228,7 +230,7 @@ using InteractiveUtils
   /**
    * Handle input from the user
    */
-  handleInput(data: string): void {
+  public handleInput(data: string): void {
     // Handle special keys
     if (data === "\r") {
       // Enter key - execute command
@@ -249,7 +251,7 @@ using InteractiveUtils
         this.historyIndex = -1;
         this.currentInput = "";
 
-        this.executeCommand(command);
+        void this.executeCommand(command);
       } else {
         this.writePrompt();
       }
@@ -427,7 +429,7 @@ using InteractiveUtils
   /**
    * Wait for worker to become idle
    */
-  private async waitForIdle(worker: any): Promise<void> {
+  private async waitForIdle(worker: Worker): Promise<void> {
     const maxWaitTime = 2 * 60000; // 60 seconds max
     const checkInterval = 500; // Check every 500ms
     const startTime = Date.now();
@@ -464,7 +466,7 @@ using InteractiveUtils
     // Handle special commands
     if (code.startsWith(".")) {
       if (!isExampleCommand(code)) {
-        return this.handleSpecialCommand(code);
+        return await this.handleSpecialCommand(code);
       }
 
       code = this.handleExampleCommand(code);
@@ -521,13 +523,13 @@ using InteractiveUtils
    * Render cell output with support for various MIME types
    */
   private async renderOutput(result: any): Promise<void> {
-    if (!result || !result.output) {
+    if (result?.output === null) {
       return;
     }
 
     const { mime, body } = result.output;
 
-    if (!mime || body === null || body === undefined) {
+    if (isNotDefined(mime) || isNotDefined(body)) {
       return;
     }
 
@@ -814,7 +816,7 @@ using InteractiveUtils
   /**
    * Close the terminal
    */
-  close(): void {
+  public close(): void {
     this.closeEmitter.fire();
   }
 }

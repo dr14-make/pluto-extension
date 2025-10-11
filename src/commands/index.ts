@@ -7,8 +7,8 @@
  * - MCP Config: Commands for configuring MCP clients (Claude, Copilot)
  */
 
-import * as vscode from "vscode";
-import { PlutoManager } from "../plutoManager.ts";
+import type * as vscode from "vscode";
+import type { PlutoManager } from "../plutoManager.ts";
 
 // Re-export all commands from domain-specific modules
 export * from "./plutoServerCommands.ts";

@@ -3,7 +3,7 @@
  */
 
 import * as vscode from "vscode";
-import { PlutoManager } from "../plutoManager.ts";
+import type { PlutoManager } from "../plutoManager.ts";
 import { createPlutoTerminal } from "../plutoTerminal.ts";
 
 /**

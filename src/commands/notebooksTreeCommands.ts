@@ -2,7 +2,9 @@ import * as vscode from "vscode";
 import type { PlutoManager } from "../plutoManager.ts";
 import type { PlutoNotebookTreeItem } from "../treeView/notebooksTreeDataProvider.ts";
 
-async function revealNotebook(notebookPath: string) {
+async function revealNotebook(
+  notebookPath: string
+): Promise<vscode.NotebookDocument> {
   const uri = vscode.Uri.file(notebookPath);
   const notebookDocument = await vscode.workspace.openNotebookDocument(uri);
   await vscode.window.showNotebookDocument(notebookDocument, {
@@ -97,7 +99,7 @@ export function registerReconnectCommand(
     vscode.commands.registerCommand(
       "pluto-notebook.reconnectNotebook",
       async (notebook: PlutoNotebookTreeItem) => {
-        plutoManager.restartNotebook(notebook.notebookPath);
+        await plutoManager.restartNotebook(notebook.notebookPath);
       }
     )
   );

@@ -9,7 +9,9 @@ import * as vscode from "vscode";
 /**
  * Toggle between code view (document) and notebook view
  */
-export function registerToggleViewCommand(context: vscode.ExtensionContext): void {
+export function registerToggleViewCommand(
+  context: vscode.ExtensionContext
+): void {
   const command = vscode.commands.registerCommand(
     "pluto-notebook.toggleView",
     async () => {

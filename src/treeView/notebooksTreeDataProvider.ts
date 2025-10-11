@@ -1,8 +1,7 @@
 import * as vscode from "vscode";
-import { PlutoManager } from "../plutoManager.ts";
+import type { PlutoManager } from "../plutoManager.ts";
 import type {
   CellDependencyData,
-  CellDependencyGraph,
   NotebookData,
   Worker,
 } from "@plutojl/rainbow";
@@ -39,10 +38,10 @@ export class PlutoNotebookTreeItem
     public readonly error?: Error
   ) {
     super(
-      notebookPath.split("/").pop() || notebookPath,
+      notebookPath.split("/").pop() ?? notebookPath,
       vscode.TreeItemCollapsibleState.Expanded
     );
-    const basename = notebookPath.split("/").pop() || notebookPath;
+    const basename = notebookPath.split("/").pop() ?? notebookPath;
 
     // Determine status
     let status = "";
@@ -105,22 +104,23 @@ class PlutoCellTreeItem
     public readonly dependencies: CellDependencyData
   ) {
     const cellResult = cellData?.result;
-    const code = cellData?.input?.code || "";
+    const code = cellData?.input?.code ?? "";
     const keys = Object.keys(dependencies.downstream_cells_map ?? {});
     const upstream = new Set(
       Object.values(dependencies.upstream_cells_map)
         .flatMap((x) => x)
         .filter((x) => x !== cellId)
     );
-    const treeItemName = keys.length
-      ? keys.join(", ")
-      : code === ""
-      ? "(empty)"
-      : cellResult?.errored || cellResult?.queued || cellResult?.running
-      ? ""
-      : cellResult?.output?.mime
-      ? "(result)"
-      : "";
+    const treeItemName =
+      keys.length > 0
+        ? keys.join(", ")
+        : code === ""
+          ? "(empty)"
+          : cellResult?.errored || cellResult?.queued || cellResult?.running
+            ? ""
+            : cellResult?.output?.mime
+              ? "(result)"
+              : "";
     const mimeIcon: Record<string, string> = {
       "text/plain": "📰",
       "text/html": "📊",
@@ -179,21 +179,21 @@ class PlutoCellTreeItem
 export class NotebooksTreeDataProvider
   implements vscode.TreeDataProvider<NotebookTreeItemBase>
 {
-  private _onDidChangeTreeData: vscode.EventEmitter<
+  private readonly _onDidChangeTreeData: vscode.EventEmitter<
     NotebookTreeItemBase | undefined | null | void
   > = new vscode.EventEmitter<NotebookTreeItemBase | undefined | null | void>();
-  readonly onDidChangeTreeData: vscode.Event<
+  public readonly onDidChangeTreeData: vscode.Event<
     NotebookTreeItemBase | undefined | null | void
   > = this._onDidChangeTreeData.event;
 
   /**
    * Refresh the tree view
    */
-  refresh = (): void => {
+  public refresh = (): void => {
     this._onDidChangeTreeData.fire();
   };
 
-  constructor(private plutoManager: PlutoManager) {
+  constructor(private readonly plutoManager: PlutoManager) {
     // Listen to PlutoManager events
     this.plutoManager.on("serverStateChanged", this.refresh);
     this.plutoManager.on("notebookOpened", this.refresh);
@@ -204,22 +204,22 @@ export class NotebooksTreeDataProvider
   /**
    * Get tree item
    */
-  getTreeItem(element: NotebookTreeItemBase): vscode.TreeItem {
+  public getTreeItem(element: NotebookTreeItemBase): vscode.TreeItem {
     return element;
   }
 
   /**
    * Get children for tree item
    */
-  async getChildren(
+  public async getChildren(
     element?: NotebookTreeItemBase
   ): Promise<NotebookTreeItemBase[]> {
     if (!element) {
       // Root level - show all open notebooks
-      return this.getNotebooks();
+      return await this.getNotebooks();
     } else if (element.type === TreeItemType.Notebook) {
       // Show cells for this notebook
-      return this.getCells(element.notebookPath);
+      return await this.getCells(element.notebookPath);
     }
     return [];
   }
@@ -234,7 +234,7 @@ export class NotebooksTreeDataProvider
       return [];
     }
 
-    return Promise.all(
+    return await Promise.all(
       notebooks.map(async (notebook) => {
         let plutoNotebook: NotebookData | undefined;
         let error: Error | undefined;
@@ -274,7 +274,7 @@ export class NotebooksTreeDataProvider
       // Get cell order from worker
       const notebookData: NotebookData = worker.getState();
       const cellOrder = notebookData.cell_order;
-      if (!cellOrder || !Array.isArray(cellOrder)) {
+      if (cellOrder === null || !Array.isArray(cellOrder)) {
         return [];
       }
 
@@ -319,7 +319,7 @@ export class NotebooksTreeDataProvider
   /**
    * Dispose of resources
    */
-  dispose(): void {
+  public dispose(): void {
     this.plutoManager.off("serverStateChanged", this.refresh);
     this.plutoManager.off("notebookOpened", this.refresh);
     this.plutoManager.off("notebookClosed", this.refresh);

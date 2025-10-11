@@ -1,26 +1,25 @@
 import * as vscode from "vscode";
-import { CellResultData } from "@plutojl/rainbow";
+import type { CellResultData } from "@plutojl/rainbow";
 
 /**
  * Manages webview panels for displaying terminal output with rich content
  * Reuses the existing Pluto renderer components
  */
 export class TerminalOutputWebviewProvider {
-  private static panels = new Map<string, vscode.WebviewPanel>();
+  private static readonly panels = new Map<string, vscode.WebviewPanel>();
   private static currentOutputId = 0;
 
   /**
    * Show terminal output in a webview panel
    */
-  static showOutput(
+  public static showOutput(
     context: vscode.ExtensionContext,
     result: CellResultData,
-    title: string = "Terminal Output"
+    title = "Terminal Output"
   ): void {
     const outputId = `terminal-output-${this.currentOutputId++}`;
-    const columnToShowIn = vscode.window.activeTextEditor
-      ? vscode.window.activeTextEditor.viewColumn
-      : undefined;
+    const columnToShowIn =
+      vscode.window.activeTextEditor?.viewColumn ?? undefined;
 
     // Check if we already have a panel
     let panel = this.panels.get(outputId);
@@ -33,7 +32,7 @@ export class TerminalOutputWebviewProvider {
       panel = vscode.window.createWebviewPanel(
         "plutoTerminalOutput",
         title,
-        columnToShowIn || vscode.ViewColumn.Beside,
+        columnToShowIn ?? vscode.ViewColumn.Beside,
         {
           enableScripts: true,
           retainContextWhenHidden: true,
@@ -58,7 +57,7 @@ export class TerminalOutputWebviewProvider {
   /**
    * Show latest output in a persistent webview (reuses same panel)
    */
-  static showLatestOutput(
+  public static showLatestOutput(
     context: vscode.ExtensionContext,
     result: CellResultData
   ): void {
@@ -105,11 +104,6 @@ export class TerminalOutputWebviewProvider {
     context: vscode.ExtensionContext,
     result: CellResultData
   ): string {
-    // Get URI for the renderer script
-    const rendererUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(context.extensionUri, "dist", "renderer.js")
-    );
-
     const rendererCssUri = webview.asWebviewUri(
       vscode.Uri.joinPath(context.extensionUri, "dist", "renderer.css")
     );
@@ -159,7 +153,7 @@ export class TerminalOutputWebviewProvider {
 <body>
     <div class="output-header">
         <h3>Terminal Output</h3>
-        <div class="mime-type">MIME: ${result.output?.mime || "unknown"}</div>
+        <div class="mime-type">MIME: ${result.output?.mime ?? "unknown"}</div>
     </div>
     <div class="output-container" id="output-root"></div>
 
@@ -197,7 +191,7 @@ export class TerminalOutputWebviewProvider {
   /**
    * Dispose all panels
    */
-  static disposeAll(): void {
+  public static disposeAll(): void {
     for (const panel of this.panels.values()) {
       panel.dispose();
     }

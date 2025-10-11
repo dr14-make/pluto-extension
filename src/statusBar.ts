@@ -1,16 +1,16 @@
 import * as vscode from "vscode";
-import { PlutoManager } from "./plutoManager.ts";
+import type { PlutoManager } from "./plutoManager.ts";
 
 /**
  * Manages the Pluto server status bar item
  */
 export class PlutoStatusBar {
-  private statusBarItem: vscode.StatusBarItem;
+  private readonly statusBarItem: vscode.StatusBarItem;
 
   /**
    * Update the status bar item based on server state
    */
-  private update = (): void => {
+  private readonly update = (): void => {
     const isRunning = this.plutoManager.isRunning();
     const isConnected = this.plutoManager.isConnected();
 
@@ -23,7 +23,7 @@ export class PlutoStatusBar {
     }
   };
 
-  constructor(private plutoManager: PlutoManager) {
+  constructor(private readonly plutoManager: PlutoManager) {
     // Create status bar item (aligned to right, priority 100)
     this.statusBarItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Right,
@@ -42,7 +42,7 @@ export class PlutoStatusBar {
     this.statusBarItem.show();
   }
 
-  private setRunning() {
+  private setRunning(): void {
     // Server is running and connected
     this.statusBarItem.text = "$(check) Pluto";
     this.statusBarItem.tooltip = `Pluto server is running on ${this.plutoManager.getServerUrl()}\nClick to stop`;
@@ -51,7 +51,7 @@ export class PlutoStatusBar {
       "statusBarItem.prominentForeground"
     );
   }
-  private setStarting() {
+  private setStarting(): void {
     // Server task is running but not connected yet (starting)
     this.statusBarItem.text = "$(sync~spin) Pluto";
     this.statusBarItem.tooltip = "Pluto server is starting...\nClick to stop";
@@ -60,7 +60,7 @@ export class PlutoStatusBar {
     );
     this.statusBarItem.color = undefined;
   }
-  private setStopped() {
+  private setStopped(): void {
     // Server is stopped
     this.statusBarItem.text = "$(debug-stop) Pluto";
     this.statusBarItem.tooltip = "Pluto server is stopped\nClick to start";
@@ -79,7 +79,7 @@ export class PlutoStatusBar {
   /**
    * Dispose of the status bar item and cleanup
    */
-  dispose(): void {
+  public dispose(): void {
     this.plutoManager.off("serverStateChanged", this.update);
     this.statusBarItem.dispose();
   }

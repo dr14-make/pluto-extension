@@ -1,5 +1,6 @@
 import "@plutojl/rainbow/node-polyfill";
-import { CellResultData, Host, Worker } from "@plutojl/rainbow";
+import type { CellResultData, Worker } from "@plutojl/rainbow";
+import { Host } from "@plutojl/rainbow";
 import { readFile } from "fs/promises";
 import { PlutoServerTaskManager } from "./plutoServerTask.js";
 import { EventEmitter } from "events";
@@ -33,16 +34,16 @@ export interface PlutoManagerLogger {
  */
 export class PlutoManager {
   private host?: Host; // Host from @plutojl/rainbow
-  private workers: Map<string, Worker> = new Map(); // notebook_id -> Worker
+  private readonly workers: Map<string, Worker> = new Map(); // notebook_id -> Worker
   private serverUrl: string;
-  private taskManager: PlutoServerTaskManager;
-  private usingCustomServerUrl: boolean = false;
-  private notebooksToRecreate: Set<string> = new Set(); // Paths of notebooks to recreate after reconnect
-  private eventEmitter: EventEmitter = new EventEmitter();
+  private readonly taskManager: PlutoServerTaskManager;
+  private usingCustomServerUrl = false;
+  private readonly notebooksToRecreate: Set<string> = new Set(); // Paths of notebooks to recreate after reconnect
+  private readonly eventEmitter: EventEmitter = new EventEmitter();
 
   constructor(
-    private port: number = 1234,
-    private logger: PlutoManagerLogger,
+    private readonly port = 1234,
+    private readonly logger: PlutoManagerLogger,
     serverUrl?: string
   ) {
     if (serverUrl) {
@@ -63,7 +64,7 @@ export class PlutoManager {
   /**
    * Register event listener
    */
-  on<K extends keyof PlutoManagerEvents>(
+  public on<K extends keyof PlutoManagerEvents>(
     event: K,
     listener: PlutoManagerEvents[K]
   ): void {
@@ -73,7 +74,7 @@ export class PlutoManager {
   /**
    * Remove event listener
    */
-  off<K extends keyof PlutoManagerEvents>(
+  public off<K extends keyof PlutoManagerEvents>(
     event: K,
     listener: PlutoManagerEvents[K]
   ): void {
@@ -102,7 +103,7 @@ export class PlutoManager {
 
     // Close all workers
     for (const worker of this.workers.values()) {
-      worker.shutdown();
+      void worker.shutdown();
     }
     this.workers.clear();
 
@@ -113,7 +114,7 @@ export class PlutoManager {
     this.emit("serverStateChanged");
 
     // Show warning to user if server stopped unexpectedly
-    if (this.taskManager.isRunning() === false) {
+    if (!this.taskManager.isRunning()) {
       this.logger
         .showErrorMessage(
           "Pluto server stopped unexpectedly. Click 'Restart' to start it again.",
@@ -134,36 +135,32 @@ export class PlutoManager {
   /**
    * Check if Pluto server is running
    */
-  isRunning(): boolean {
+  public isRunning(): boolean {
     return this.taskManager.isRunning() && this.isConnected();
   }
 
   /**
    * Check if connected to a host (with or without owning the process)
    */
-  isConnected(): boolean {
+  public isConnected(): boolean {
     return !!this.host;
   }
 
   /**
    * Connect to an existing Pluto server without starting a new one
    */
-  async connect(): Promise<void> {
+  public async connect(): Promise<void> {
     if (this.isConnected()) {
       return;
     }
 
-    try {
-      this.host = new Host(this.serverUrl);
-    } catch (error) {
-      throw error;
-    }
+    this.host = new Host(this.serverUrl);
   }
 
   /**
    * Start Pluto server (or connect to custom server URL)
    */
-  async start(): Promise<void> {
+  public async start(): Promise<void> {
     // If using custom server URL, just connect without starting
     if (this.usingCustomServerUrl) {
       await this.connect();
@@ -176,19 +173,15 @@ export class PlutoManager {
       return;
     }
 
-    try {
-      await this.taskManager.start();
-      await this.taskManager.waitForReady();
-      await this.connect();
+    await this.taskManager.start();
+    await this.taskManager.waitForReady();
+    await this.connect();
 
-      // Emit server state changed event
-      this.emit("serverStateChanged");
+    // Emit server state changed event
+    this.emit("serverStateChanged");
 
-      // Recreate workers for notebooks that were open before server stopped
-      await this.recreateWorkers();
-    } catch (error) {
-      throw error;
-    }
+    // Recreate workers for notebooks that were open before server stopped
+    await this.recreateWorkers();
   }
 
   /**
@@ -216,10 +209,10 @@ export class PlutoManager {
   /**
    * Stop Pluto server
    */
-  async stop(): Promise<void> {
+  public async stop(): Promise<void> {
     // Close all workers
     for (const worker of this.workers.values()) {
-      worker.shutdown();
+      await worker.shutdown();
     }
     this.workers.clear();
 
@@ -237,7 +230,7 @@ export class PlutoManager {
   /**
    * Restart Pluto server
    */
-  async restart(): Promise<void> {
+  public async restart(): Promise<void> {
     await this.stop();
     await this.start();
   }
@@ -246,7 +239,7 @@ export class PlutoManager {
    * Get or create a worker for a notebook
    * const notebookPath = notebookUri.fsPath;
    */
-  async getWorker(notebookPath: string): Promise<Worker | undefined> {
+  public async getWorker(notebookPath: string): Promise<Worker | undefined> {
     if (!this.isConnected()) {
       await this.start();
     }
@@ -283,38 +276,37 @@ export class PlutoManager {
   /**
    * Execute a cell
    */
-  async executeCell(
+  public async executeCell(
     worker: Worker,
     cellId: string,
     code: string
   ): Promise<CellResultData | null> {
-    try {
-      // Update existing cell code and run it
-      await worker.updateSnippetCode(cellId, code, true);
+    // Update existing cell code and run it
+    await worker.updateSnippetCode(cellId, code, true);
 
-      // Wait for execution to complete
-      // await worker.wait(true);
+    // Wait for execution to complete
+    // await worker.wait(true);
 
-      // Get cell result
-      const cellData = worker.getSnippet(cellId);
-      const result = cellData?.result || null;
-      return result;
-    } catch (error) {
-      throw error;
-    }
+    // Get cell result
+    const cellData = worker.getSnippet(cellId);
+    return cellData?.result ?? null;
   }
 
   /**
    * Emit cell updated event (to be called by controller)
    */
-  emitCellUpdated(notebookPath: string, cellId: string): void {
+  public emitCellUpdated(notebookPath: string, cellId: string): void {
     this.emit("cellUpdated", notebookPath, cellId);
   }
 
   /**
    * Add a new cell to the notebook
    */
-  async addCell(worker: Worker, index: number, code: string): Promise<string> {
+  public async addCell(
+    worker: Worker,
+    index: number,
+    code: string
+  ): Promise<string> {
     const cellId = await worker.addSnippet(index, code);
     return cellId;
   }
@@ -322,14 +314,14 @@ export class PlutoManager {
   /**
    * Delete a cell from the notebook
    */
-  async deleteCell(worker: Worker, cellId: string): Promise<void> {
+  public async deleteCell(worker: Worker, cellId: string): Promise<void> {
     await worker.deleteSnippets([cellId]);
   }
 
   /**
    * Get the server URL
    */
-  getServerUrl(): string {
+  public getServerUrl(): string {
     return this.serverUrl;
   }
 
@@ -337,7 +329,7 @@ export class PlutoManager {
    * Close connection to a notebook
    * const notebookPath = notebookUri.fsPath;
    */
-  async closeNotebook(notebookPath: string): Promise<void> {
+  public async closeNotebook(notebookPath: string): Promise<void> {
     const worker = this.workers.get(notebookPath);
 
     if (worker) {
@@ -353,7 +345,7 @@ export class PlutoManager {
   /**
    * Get list of open notebooks
    */
-  getOpenNotebooks(): Array<{ path: string; notebookId: string }> {
+  public getOpenNotebooks(): Array<{ path: string; notebookId: string }> {
     const notebooks: Array<{ path: string; notebookId: string }> = [];
     for (const [path, worker] of this.workers.entries()) {
       notebooks.push({
@@ -368,50 +360,42 @@ export class PlutoManager {
    * Execute Julia code in a notebook without creating a persistent cell
    * This uses waitSnippet at index 0 and then immediately deletes the cell
    */
-  async executeCodeEphemeral(
+  public async executeCodeEphemeral(
     worker: Worker,
     code: string
   ): Promise<CellResultData> {
-    try {
-      // Execute code at index 0 (creates a temporary cell)
-      const result = await worker.waitSnippet(0, code);
+    // Execute code at index 0 (creates a temporary cell)
+    const result = await worker.waitSnippet(0, code);
 
-      // Delete the cell immediately after execution
-      try {
-        await worker.deleteSnippets([result.cell_id]);
-      } catch (deleteError) {
-        // Silently ignore deletion errors for ephemeral cells
-      }
+    // Delete the cell immediately after execution
+    await worker.deleteSnippets([result.cell_id]);
 
-      return result;
-    } catch (error) {
-      throw error;
-    }
+    return result;
   }
 
   /**
    * Close all notebook connections
    */
-  dispose(): void {
+  public async dispose(): Promise<void> {
     for (const worker of this.workers.values()) {
-      worker.shutdown();
+      await worker.shutdown();
     }
     this.workers.clear();
 
     // Stop task (fire and forget - dispose is not async)
     if (this.taskManager.isRunning()) {
-      this.taskManager.stop().catch(() => {
+      await this.taskManager.stop().catch(() => {
         // Ignore errors during dispose
       });
     }
   }
 
-  public async restartNotebook(notebookPath?: string) {
+  public async restartNotebook(notebookPath?: string): Promise<void> {
     try {
       // Close existing worker
       for (const notebook of this.getOpenNotebooks()) {
         if (!notebookPath || notebook.path === notebookPath) {
-          this.closeNotebook(notebook.path);
+          await this.closeNotebook(notebook.path);
 
           // Wait a bit for cleanup
           await new Promise((resolve) => setTimeout(resolve, 100));
@@ -419,13 +403,13 @@ export class PlutoManager {
           // Recreate worker
           await this.getWorker(notebook.path);
 
-          this.logger.showInfoMessage(
+          void this.logger.showInfoMessage(
             `Reconnected to notebook: ${notebook.path.split("/").pop()}`
           );
         }
       }
     } catch (error) {
-      this.logger.showErrorMessage(
+      void this.logger.showErrorMessage(
         `Failed to reconnect notebook: ${
           error instanceof Error ? error.message : String(error)
         }`

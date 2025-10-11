@@ -1,12 +1,12 @@
 import "@plutojl/rainbow/node-polyfill";
 import express from "express";
 import type { Express, Request, Response } from "express";
-import { Server as HttpServer } from "http";
+import type { Server as HttpServer } from "http";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import { PlutoManager } from "./plutoManager.ts";
+import type { PlutoManager } from "./plutoManager.ts";
 import { z } from "zod";
-// @ts-ignore - esbuild will load this as text
+// @ts-expect-error - esbuild will load this as text
 import PlutoGuide from "./PLUTO_GUIDE.md";
 
 // Singleton instance
@@ -17,13 +17,13 @@ let mcpServerInstance: PlutoMCPHttpServer | undefined;
  * This allows the extension and MCP clients to share the same PlutoManager instance
  */
 export class PlutoMCPHttpServer {
-  private app: Express;
+  private readonly app: Express;
   private httpServer?: HttpServer;
-  private transports: Map<string, SSEServerTransport> = new Map();
-  private plutoManager: PlutoManager;
-  private port: number;
+  private readonly transports: Map<string, SSEServerTransport> = new Map();
+  private readonly plutoManager: PlutoManager;
+  private readonly port: number;
 
-  constructor(plutoManager: PlutoManager, port: number = 3100) {
+  constructor(plutoManager: PlutoManager, port = 3100) {
     this.plutoManager = plutoManager;
     this.port = port;
     this.app = express();
@@ -595,8 +595,8 @@ export class PlutoMCPHttpServer {
     });
   }
 
-  async start(): Promise<void> {
-    return new Promise((resolve, reject) => {
+  public async start(): Promise<void> {
+    return await new Promise((resolve, reject) => {
       this.httpServer = this.app.listen(this.port, (error?: Error) => {
         if (error) {
           console.error("[MCP HTTP] Failed to start server:", error);
@@ -617,7 +617,7 @@ export class PlutoMCPHttpServer {
     });
   }
 
-  async stop(): Promise<void> {
+  public async stop(): Promise<void> {
     console.log("[MCP HTTP] Stopping MCP server...");
 
     // Close all active transports
@@ -635,21 +635,19 @@ export class PlutoMCPHttpServer {
     }
 
     // Close HTTP server
-    if (this.httpServer) {
-      await new Promise<void>((resolve) => {
-        this.httpServer!.close(() => {
-          console.log("[MCP HTTP] HTTP server closed");
-          resolve();
-        });
+    await new Promise<void>((resolve) => {
+      this.httpServer?.close(() => {
+        console.log("[MCP HTTP] HTTP server closed");
+        resolve();
       });
-    }
+    });
   }
 
-  getPort(): number {
+  public getPort(): number {
     return this.port;
   }
 
-  isRunning(): boolean {
+  public isRunning(): boolean {
     return !!this.httpServer?.listening;
   }
 }

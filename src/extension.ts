@@ -16,7 +16,9 @@ import { PlutoTerminalProvider } from "./plutoTerminal.ts";
 import { PlutoStatusBar } from "./statusBar.ts";
 import { registerNotebooksTreeView } from "./treeView/notebooksTreeView.ts";
 
-export async function activate(context: vscode.ExtensionContext) {
+export async function activate(
+  context: vscode.ExtensionContext
+): Promise<void> {
   // Create controller output channel
   const controllerOutputChannel =
     vscode.window.createOutputChannel("Pluto Controller");
@@ -106,9 +108,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.window.registerTerminalProfileProvider("pluto-notebook.terminal", {
-      provideTerminalProfile(
-        token: vscode.CancellationToken
-      ): vscode.ProviderResult<vscode.TerminalProfile> {
+      provideTerminalProfile() // _token: vscode.CancellationToken
+      : vscode.ProviderResult<vscode.TerminalProfile> {
         const pty = new PlutoTerminalProvider(
           plutoManager,
           terminalOutputChannel,

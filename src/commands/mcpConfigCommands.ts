@@ -48,14 +48,13 @@ async function createProjectMCPConfig(
   const configPath = vscode.Uri.joinPath(workspaceFolder.uri, configFileName);
 
   try {
-
     // Try to read existing config
     let existingConfig: any = {};
 
     try {
       const existingContent = await vscode.workspace.fs.readFile(configPath);
       existingConfig = JSON.parse(new TextDecoder().decode(existingContent));
-    } catch (error) {
+    } catch {
       // File doesn't exist, use default empty config
     }
 
@@ -66,22 +65,17 @@ async function createProjectMCPConfig(
         : getCopilotConfig(mcpUrl);
 
     if (configType === "claude") {
-      if (!existingConfig.mcpServers) {
-        existingConfig.mcpServers = {};
-      }
-      existingConfig.mcpServers["pluto-notebook"] = (newConfig as any)
-        .mcpServers["pluto-notebook"];
+      existingConfig.mcpServers ??= {};
+      existingConfig.mcpServers["pluto-notebook"] = (
+        newConfig as any
+      ).mcpServers["pluto-notebook"];
     } else {
       // Copilot config structure
-      if (!existingConfig.servers) {
-        existingConfig.servers = {};
-      }
+      existingConfig.servers ??= {};
       existingConfig.servers["pluto-notebook"] = (newConfig as any).servers[
         "pluto-notebook"
       ];
-      if (!existingConfig.inputs) {
-        existingConfig.inputs = [];
-      }
+      existingConfig.inputs ??= [];
     }
 
     // Write the config file

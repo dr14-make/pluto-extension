@@ -1,9 +1,9 @@
-import { CellInputData, NotebookData } from "@plutojl/rainbow";
+import type { CellInputData, NotebookData } from "@plutojl/rainbow";
 import { parse, serialize } from "./rainbowAdapter.ts";
 import * as vscode from "vscode";
 import { formatCellOutput } from "./serializer.ts";
-import { validate } from "uuid";
-import { v4 as uuidv4 } from "uuid";
+import { v4 as uuidv4, validate } from "uuid";
+import { isDefined, isNotDefined } from "./helpers.ts";
 
 /**
  * Pure functions for Pluto notebook parsing and serialization
@@ -23,26 +23,27 @@ export interface ParsedNotebook {
 export function createVsCodeCellFromPlutoCell(
   notebookData: NotebookData,
   plutoCellId: string
-) {
-  // Validate UUID
+): vscode.NotebookCellData | null {
+  // Validate UUID format and check cell exists
   const cellInput = notebookData.cell_inputs[plutoCellId];
 
-  if (!validate(plutoCellId) || !cellInput) {
+  if (!validate(plutoCellId) || isNotDefined(cellInput)) {
     throw new Error(
       `Invalid or missing cell ID: ${plutoCellId} fix in the code`
     );
   }
 
-  let code = cellInput.code || "";
+  let code = cellInput.code ?? "";
 
   // Check if cell is markdown by looking for #VSCODE-MARKDOWN marker or md""" wrapper
   const isVSCodeMarkdown = isMarkdownCell(code);
-  const hasMarkdownWrapper = /^\s*md"""/.test(code);
-  const isMarkdown = isVSCodeMarkdown && hasMarkdownWrapper;
+  const possibleMdCode = extractMarkdownContent(code);
+  // Cell is markdown if it has EITHER the VSCODE-MARKDOWN marker OR the md""" wrapper
+  const isMarkdown = isVSCodeMarkdown && isDefined(possibleMdCode);
 
   // Extract markdown content from md"""...""" wrapper
   if (isMarkdown) {
-    code = extractMarkdownContent(code);
+    code = possibleMdCode;
   }
 
   const cellData = new vscode.NotebookCellData(
@@ -50,7 +51,7 @@ export function createVsCodeCellFromPlutoCell(
     code,
     isMarkdown ? "markdown" : "julia"
   );
-  const results = notebookData.cell_results[plutoCellId] || null;
+  const results = notebookData.cell_results[plutoCellId] ?? null;
   if (results !== null) {
     // Add output if available
     cellData.outputs = [formatCellOutput(results)];
@@ -70,7 +71,7 @@ export function parsePlutoNotebook(content: string): ParsedNotebook {
   const notebookData = parse(content);
 
   const cells: vscode.NotebookCellData[] = [];
-  if (!notebookData) {
+  if (isNotDefined(notebookData)) {
     return {
       cells: [],
       notebook_id: "",
@@ -78,10 +79,10 @@ export function parsePlutoNotebook(content: string): ParsedNotebook {
     };
   }
   const cell_order =
-    notebookData.cell_order || Object.keys(notebookData.cell_inputs);
+    notebookData.cell_order ?? Object.keys(notebookData.cell_inputs);
   for (const cellId of cell_order) {
     const cell = createVsCodeCellFromPlutoCell(notebookData, cellId);
-    if (!cell) {
+    if (isNotDefined(cell)) {
       continue;
     }
 
@@ -98,22 +99,22 @@ export function parsePlutoNotebook(content: string): ParsedNotebook {
 /**
  * Serialize cells back to Pluto notebook format
  */
-export async function serializePlutoNotebook(
+export function serializePlutoNotebook(
   cells: vscode.NotebookCellData[],
   notebookId?: string,
   plutoVersion?: string
-): Promise<string> {
+): string {
   const cellInputs: Record<string, PlutoCellData> = {};
   const cellOrder: string[] = [];
 
   for (const cell of cells) {
-    const cellId = cell.metadata?.pluto_cell_id || generateCellId();
+    const cellId = cell.metadata?.pluto_cell_id ?? generateCellId();
 
     // Wrap markdown cells in md"""...""" and add #VSCODE-MARKDOWN marker
     let code = cell.value;
     if (cell.kind === vscode.NotebookCellKind.Markup) {
       // Add #VSCODE-MARKDOWN marker as first line, followed by md""" wrapper
-      code = `#VSCODE-MARKDOWN\nmd"""\n${cell.value}\n"""`;
+      code = `#VSCODE-MARKDOWN\nmd"""${cell.value}"""`;
     }
 
     cellInputs[cellId] = {
@@ -132,7 +133,7 @@ export async function serializePlutoNotebook(
   }
 
   const notebookData: PlutoNotebookData = {
-    notebook_id: notebookId || generateNotebookId(),
+    notebook_id: notebookId ?? generateNotebookId(),
     pluto_version: plutoVersion,
     path: "",
     shortpath: "",
@@ -152,29 +153,34 @@ export async function serializePlutoNotebook(
     status_tree: null,
   };
 
-  return await serialize(notebookData);
+  return serialize(notebookData);
 }
 
 /**
  * Extract markdown content from md"""...""" wrapper
  * Handles newlines, spaces, and all characters within the quotes
+ * Also strips #VSCODE-MARKDOWN marker if present
  */
-export function extractMarkdownContent(code: string): string {
+export function extractMarkdownContent(code: string): string | undefined {
+  // First, remove #VSCODE-MARKDOWN marker if present (with optional whitespace before)
+  const cleaned = code.replace(/^\s*#VSCODE-MARKDOWN\s*\n?/, "");
+
   // Match triple-quote markdown: md"""CONTENT"""
   // [\s\S] matches any character including newlines
-  const tripleQuoteMatch = code.match(/^\s*md"""([\s\S]*?)"""\s*$/);
+  // Allow any whitespace/newlines before md"""
+  const tripleQuoteMatch = cleaned.match(/^\s*md"""([\s\S]*?)"""\s*$/);
   if (tripleQuoteMatch) {
     return tripleQuoteMatch[1];
   }
 
   // Match single-quote markdown: md"content"
-  const singleQuoteMatch = code.match(/^\s*md"([^"]*)"\s*$/);
+  const singleQuoteMatch = cleaned.match(/^\s*md"([^"]*)"\s*$/);
   if (singleQuoteMatch) {
     return singleQuoteMatch[1];
   }
 
-  // If no match, return as-is (might already be extracted)
-  return code;
+  // If no match, return the cleaned version (without the marker)
+  return undefined;
 }
 
 /**
