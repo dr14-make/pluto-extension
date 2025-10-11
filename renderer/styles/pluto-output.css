@@ -35,3 +35,7 @@ details[open] {
     var(--vscode-textBlockQuote-border, var(--vscode-panel-border));
   padding-left: 0.5rem;
 }
+
+.fix-with-ai {
+  display: none;
+}
