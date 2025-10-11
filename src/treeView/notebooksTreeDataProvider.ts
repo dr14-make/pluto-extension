@@ -122,9 +122,7 @@ class PlutoCellTreeItem
               ? "(result)"
               : "";
     super(
-      `${" · ".repeat(
-        upstream.size
-      )}${treeItemName}`,
+      `${" · ".repeat(upstream.size)}${treeItemName}`,
       vscode.TreeItemCollapsibleState.None
     );
 
