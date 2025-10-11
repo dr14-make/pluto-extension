@@ -121,18 +121,8 @@ class PlutoCellTreeItem
             : cellResult?.output?.mime
               ? "(result)"
               : "";
-    const mimeIcon: Record<string, string> = {
-      "text/plain": "📰",
-      "text/html": "📊",
-      "text/svg": "🌅",
-      "image/png": "🌅",
-      "application/vnd.pluto.stacktrace+object": "🤯",
-      "application/vnd.pluto.tree+object": "#️⃣",
-      "": "⚪",
-    };
-    const mime = cellData?.result.output.mime;
     super(
-      `${mimeIcon[mime ?? ""] ?? "⚪"}${" · ".repeat(
+      `${" · ".repeat(
         upstream.size
       )}${treeItemName}`,
       vscode.TreeItemCollapsibleState.None
