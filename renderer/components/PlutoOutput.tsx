@@ -90,10 +90,13 @@ export function PlutoOutput({ state, context }: PlutoOutputProps) {
   const OUTPUT = useMemo(() => {
     // This is probably a bug in the immer bundling; the mime edits don't propagate ;/
     // TODO: @pankgeorg investigate pls
+    const { mime, body } = localState.output ?? {};
     const fixedMime =
-      localState.output.mime === "application/vnd.pluto.stacktrace+object" &&
-      (typeof localState.output.body !== "object" ||
-        !("stacktrace" in localState.output.body))
+      (mime === "application/vnd.pluto.stacktrace+object" &&
+        (typeof body !== "object" ||
+          !("stacktrace" in localState.output.body))) ||
+      (mime === "application/vnd.pluto.tree+object" &&
+        (typeof body !== "object" || !("type" in localState.output.body)))
         ? "text/plain"
         : localState.output.mime;
     if (localState.output?.mime)
