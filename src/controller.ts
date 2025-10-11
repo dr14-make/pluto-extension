@@ -383,12 +383,31 @@ export class PlutoNotebookController {
     //   );
     // }
   }
+  private updateAllCellsFromState = (
+    notebook: vscode.NotebookDocument,
+    update: UpdateEvent
+  ) => {
+    // Optimistically send data. May be ignored.
+    // If not ignored, this makes sure logs, stdout and progress
+    // is communicated
+    const fullNotebookState = update.notebook;
+    Object.entries(fullNotebookState?.cell_results ?? {}).forEach(
+      ([cell_id, state]) => {
+        this.sendMessageToRenderer(notebook, {
+          type: "setState",
+          state,
+          cell_id,
+        });
+      }
+    );
+  };
 
   /**
    * Handles streaming updates from the Pluto worker via patches.
    */
   private onPlutoNotebookUpdate = (notebook: vscode.NotebookDocument) => {
     return (event: UpdateEvent) => {
+      console.log({ event });
       try {
         const patches = event.data?.patches as Patch[] | undefined;
         const fullNotebookState = event.notebook;
@@ -399,7 +418,7 @@ export class PlutoNotebookController {
           );
           return;
         }
-
+        let anyWeird = false;
         for (const patch of patches) {
           const path = patch.path;
           const [action, ...rest] = path;
@@ -462,12 +481,18 @@ export class PlutoNotebookController {
             case "last_save_time":
               break;
             default:
+              anyWeird = true;
               this.outputChannel.appendLine(
                 `[UNHANDLED]  ${patch.path.join(".")} action ${patch.op}`
               );
           }
         }
+        if (anyWeird) {
+          console.log("Not sure if all ok, updating everything");
+          this.updateAllCellsFromState(notebook, event);
+        }
       } catch (e: unknown) {
+        this.updateAllCellsFromState(notebook, event);
         this.outputChannel.appendLine(
           `Failed to process patch update: ${
             e instanceof Error ? e.message : String(e)

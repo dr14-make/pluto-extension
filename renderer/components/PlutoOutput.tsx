@@ -12,6 +12,7 @@ import {
   setup_mathjax,
   useState,
   useErrorBoundary,
+  useMemo,
 } from "@plutojl/rainbow/ui";
 import { type RendererContext } from "vscode-notebook-renderer";
 
@@ -85,7 +86,35 @@ export function PlutoOutput({ state, context }: PlutoOutputProps) {
     });
     return () => d?.dispose();
   }, [state.cell_id, context]);
+
+  const OUTPUT = useMemo(() => {
+    // This is probably a bug in the immer bundling; the mime edits don't propagate ;/
+    // TODO: @pankgeorg investigate pls
+    const fixedMime =
+      localState.output.mime === "application/vnd.pluto.stacktrace+object" &&
+      (typeof localState.output.body !== "object" ||
+        !("stacktrace" in localState.output.body))
+        ? "text/plain"
+        : localState.output.mime;
+    if (localState.output?.mime)
+      return html`<${OutputBody}
+    persist_js_state="${localState.output.persist_js_state}"
+    body="${localState.output?.body}"
+    mime="${fixedMime}"
+    sanitize_html="${false /* Maybe reconsider */}"
+  ></${OutputBody}>`;
+    return "Loading...";
+  }, [
+    localState,
+    localState.cell_id,
+    localState.output.mime,
+    localState.output.body,
+    localState.running,
+    localState.errored,
+  ]);
+
   if (error) {
+    console.error(error);
     return html`<div onclick=${resetError}>
       An error occured. Click <button onClick=${resetError}>here</button> to
       reset the view
@@ -108,14 +137,7 @@ export function PlutoOutput({ state, context }: PlutoOutputProps) {
         ></progress>
       </div>`
     : null}
-  ${localState.output?.mime
-    ? html`<${OutputBody}
-    persist_js_state="${localState.output.persist_js_state}"
-    body="${localState.output?.body}"
-    mime="${localState.output?.mime}"
-    sanitize_html="${false /* Maybe reconsider */}"
-  ></${OutputBody}>`
-    : "Loading..."}
+  ${OUTPUT}
   ${terminal?.length
     ? html`<details>
           <summary>stdout</summary>

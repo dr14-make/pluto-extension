@@ -30,7 +30,6 @@ export class PlutoNotebookSerializer implements vscode.NotebookSerializer {
         pluto_notebook_id: parsed.notebook_id,
         pluto_version: parsed.pluto_version,
       };
-
       return notebookData;
     } catch (error) {
       // Fallback: treat as single code cell if parsing fails
