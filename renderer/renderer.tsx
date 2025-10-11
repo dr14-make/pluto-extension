@@ -4,12 +4,10 @@ import type {
   RendererContext,
 } from "vscode-notebook-renderer";
 import { PlutoOutput } from "./components/PlutoOutput";
-import { html, render } from "@plutojl/rainbow/ui";
-
-interface PlutoOutputData {
-  mime: string;
-  body: string | Uint8Array;
-}
+import { html, PlutoActionsContext, render } from "@plutojl/rainbow/ui";
+import { CellResultData } from "@plutojl/rainbow";
+import plutoOutputStyles from "./styles/pluto-output.css";
+import treeStyles from "./styles/tree.css";
 
 /**
  * Communication bridge for sending messages to the controller
@@ -28,33 +26,49 @@ export function postMessageToController(message: any): void {
   }
 }
 
+// Inject styles into the document
+function injectStyles() {
+  const styleId = "pluto-renderer-styles";
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement("style");
+    style.id = styleId;
+    style.textContent = plutoOutputStyles + "\n" + treeStyles;
+    document.head.appendChild(style);
+  }
+}
+
 export const activate: ActivationFunction = (
   context: RendererContext<void>
 ) => {
+  // Inject styles once when renderer activates
+  injectStyles();
+
   // Store messaging API for use in components
   messagingApi = context.postMessage;
-
-  // Listen for messages from the controller
-  context.onDidReceiveMessage?.((message) => {
-    console.log("[RENDERER] Received message from controller:", message);
-
-    // Placeholder: Handle different message types from controller
-    switch (message.type) {
-      case "bond":
-        console.log("[RENDERER] Bond received at:", message.timestamp);
-        break;
-
-      default:
-        console.log("[RENDERER] Unknown message type:", message.type);
-    }
-  });
-
   return {
     renderOutputItem(outputItem, element) {
-      const output: PlutoOutputData = outputItem.json();
+      const state: CellResultData = outputItem.json();
       // Render directly into the provided element
       // This ensures VS Code can properly clear/replace outputs
-      render(html`<${PlutoOutput} output="${output}" />`, element);
+      const actions = {
+        get_notebook: () => ({}),
+        request_js_link_response: () => {},
+        update_notebook: () => {},
+        set_bond: (name: string, value: any) => {
+          postMessageToController({
+            type: "bond",
+            name,
+            value,
+            cell_id: state.cell_id,
+          });
+        },
+      };
+      render(
+        html`<${PlutoActionsContext.Provider} value=${actions}>
+          <${PlutoOutput} state="${state}"  context=${context} />
+        </${PlutoActionsContext.Provider}>`,
+        element
+      );
     },
   };
 };

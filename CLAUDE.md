@@ -49,9 +49,10 @@ Press `F5` in VSCode to launch Extension Development Host window for testing.
 **Notebook Serializer** (`src/serializer.ts`)
 
 - Implements `vscode.NotebookSerializer` interface
-- Currently uses simple JSON format (placeholder)
-- TODO: Parse actual Pluto .jl format with cell markers (`# ╔═╡`), metadata, and reactive dependencies
+- Parses Pluto .jl format with cell markers (`# ╔═╡`), metadata, and reactive dependencies
 - Converts between Pluto format and VSCode `NotebookData`/`NotebookCellData`
+- Handles markdown cells wrapped in `md"""..."""`
+- Supports both `.pluto.jl` and `.dyad.jl` file patterns
 
 **Notebook Controller** (`src/controller.ts`)
 
@@ -59,9 +60,33 @@ Press `F5` in VSCode to launch Extension Development Host window for testing.
 - Controller ID: `pluto-notebook-controller`
 - Notebook type: `pluto-notebook`
 - Supported language: `julia`
-- Currently placeholder execution (1 second delay)
-- TODO: Integrate `@plutojl/rainbow` for real Pluto backend execution
-- TODO: Handle reactive cell updates and dependencies
+- Integrates with `@plutojl/rainbow` for real Pluto backend execution
+- Handles reactive cell updates and dependencies
+- Supports rich output rendering via custom notebook renderer
+
+**PlutoManager** (`src/plutoManager.ts`)
+
+- Manages Pluto server lifecycle (start, stop, restart)
+- Creates and caches notebook workers
+- Handles notebook opening, closing, and execution
+- Supports both spawned server and VSCode task-based server
+- Shared between extension and MCP server for consistent state
+
+**MCP HTTP Server** (`src/mcpHttpServer.ts`)
+
+- HTTP-based MCP server for AI assistant integration
+- 12 tools for notebook management and code execution
+- Server-Sent Events (SSE) for streaming responses
+- Health check endpoint for monitoring
+- Shared PlutoManager instance with extension
+
+**Interactive Terminal** (`src/plutoTerminal.ts`)
+
+- Pseudoterminal implementation for Julia code execution
+- Command history with arrow key navigation
+- Rich output rendering in webviews
+- Special commands (.help, .connect, .status, etc.)
+- Ephemeral execution without creating notebook cells
 
 ### Build System
 
@@ -132,24 +157,43 @@ import "@plutojl/rainbow/node-polyfill";
 
 ## Current Status
 
-Basic extension structure is complete:
+The extension is functional and includes:
 
-- Serializer and controller are registered and functional
-- Extension can be debugged with F5
-- Build system works correctly
+- ✅ Pluto notebook serializer and controller (registered and functional)
+- ✅ PlutoManager for server lifecycle management
+- ✅ Integration with @plutojl/rainbow for Pluto backend communication
+- ✅ Real cell execution with reactive updates
+- ✅ Rich output rendering (HTML, plots, images) via notebook renderer
+- ✅ Interactive terminal for ephemeral code execution
+- ✅ MCP HTTP server for AI assistant integration
+- ✅ VSCode task integration for Pluto server
+- ✅ Shared state between extension and MCP clients
+- ✅ Extension can be debugged with F5
+- ✅ Build system works correctly
 
-Placeholder implementation:
+## Implementation Status
 
-- Serializer uses JSON format instead of Pluto .jl format
-- Controller simulates execution without connecting to Pluto backend
+**Completed:**
 
-## Next Implementation Priorities
+- Pluto server management with automatic lifecycle handling
+- Real-time cell execution using @plutojl/rainbow
+- Rich output rendering in notebooks and terminal webviews
+- MCP server with 12 tools for AI assistants
+- Interactive terminal with command history
+- Configuration commands for Claude Desktop and GitHub Copilot
 
-1. Parse actual Pluto .jl file format in serializer
-2. Create Pluto connection manager using @plutojl/rainbow
-3. Implement real cell execution in controller
-4. Handle rich outputs (HTML, plots, images)
-5. Support Pluto's reactive evaluation model
+**In Progress:**
+
+- Full Pluto .jl file format parsing in serializer (currently basic implementation)
+- Complete reactive evaluation model support
+
+## Future Enhancement Priorities
+
+1. Enhance Pluto .jl file format parsing in serializer
+2. Improve reactive dependency tracking
+3. Add more PlutoUI component support
+4. Enhance terminal capabilities (syntax highlighting, tab completion)
+5. Add notebook diff/merge tools
 
 ### Rainbow usage example
 

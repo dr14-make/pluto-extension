@@ -9,5 +9,14 @@
     "dist": true // set this to false to include "dist" folder in search results
   },
   // Turn off tsc task auto detection since we have the necessary tasks as npm scripts
-  "typescript.tsc.autoDetect": "off"
+  "typescript.tsc.autoDetect": "off",
+  // Jest extension configuration
+  "jest.nodeEnv": {
+    "NODE_OPTIONS": "--experimental-vm-modules"
+  },
+  // Jest Runner extension configuration
+  // "jestrunner.jestCommand": "NODE_OPTIONS=--experimental-vm-modules node_modules/.bin/jest",
+  "jestrunner.debugOptions": {
+    "runtimeArgs": ["--experimental-vm-modules"]
+  }
 }

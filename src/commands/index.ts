@@ -7,20 +7,23 @@
  * - MCP Config: Commands for configuring MCP clients (Claude, Copilot)
  */
 
-import * as vscode from "vscode";
-import { PlutoManager } from "../plutoManager.ts";
+import type * as vscode from "vscode";
+import type { PlutoManager } from "../plutoManager.ts";
 
 // Re-export all commands from domain-specific modules
 export * from "./plutoServerCommands.ts";
 export * from "./mcpServerCommands.ts";
 export * from "./mcpConfigCommands.ts";
-
+export * from "./terminalCommands.ts";
+export * from "./notebooksTreeCommands.ts";
+export * from "./viewToggleCommands.ts";
 // Import for registerAllCommands
 import {
   registerStartServerCommand,
   registerStopServerCommand,
   registerRestartServerCommand,
   registerOpenInBrowserCommand,
+  registerToggleServerCommand,
 } from "./plutoServerCommands.ts";
 
 import {
@@ -33,6 +36,14 @@ import {
   registerCreateProjectMCPConfigCommand,
   registerGetMCPHttpUrlCommand,
 } from "./mcpConfigCommands.ts";
+
+import {
+  registerFocusCellCommand,
+  registerRevealNotebookCommand,
+  registerReconnectCommand,
+} from "./notebooksTreeCommands.ts";
+import { registerCreateTerminalCommand } from "./terminalCommands.ts";
+import { registerToggleViewCommand } from "./viewToggleCommands.ts";
 
 /**
  * Register all commands at once
@@ -52,6 +63,7 @@ export function registerAllCommands(
   registerStopServerCommand(context, plutoManager);
   registerRestartServerCommand(context, plutoManager);
   registerOpenInBrowserCommand(context, plutoManager);
+  registerToggleServerCommand(context, plutoManager);
 
   // Register MCP Server commands
   registerStartMCPServerCommand(context);
@@ -61,4 +73,13 @@ export function registerAllCommands(
   // Register MCP Config commands
   registerCreateProjectMCPConfigCommand(context);
   registerGetMCPHttpUrlCommand(context);
+
+  // Register Terminal commands
+  registerCreateTerminalCommand(context, plutoManager);
+  registerFocusCellCommand(context);
+  registerRevealNotebookCommand(context);
+  registerReconnectCommand(context, plutoManager);
+
+  // Register View Toggle commands
+  registerToggleViewCommand(context);
 }

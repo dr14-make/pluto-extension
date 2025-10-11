@@ -1,7 +1,23 @@
 import * as vscode from "vscode";
-import { PlutoManager } from "./plutoManager.ts";
-import { NotebookData, UpdateEvent } from "@plutojl/rainbow";
+import type { PlutoManager } from "./plutoManager.ts";
+import type { NotebookData, UpdateEvent } from "@plutojl/rainbow";
 import { formatCellOutput } from "./serializer.ts";
+import { isDefined, isNotDefined, isEmptyString } from "./helpers.ts";
+
+/**
+ * Prepare cell code for Pluto worker
+ * Wraps markdown cells in #VSCODE-MARKDOWN marker and md""" syntax
+ */
+function prepareCellCodeForWorker(cell: vscode.NotebookCell): string {
+  const code = cell.document.getText();
+
+  // If it's a markdown cell, wrap it properly for Pluto
+  if (cell.kind === vscode.NotebookCellKind.Markup) {
+    return `#VSCODE-MARKDOWN\nmd"""\n${code}\n"""`;
+  }
+
+  return code;
+}
 
 // --- START: Merged Interfaces ---
 
@@ -11,36 +27,37 @@ type CellId = string;
 /** An RFC 6902 JSON Patch operation. */
 interface Patch {
   op: "add" | "remove" | "replace" | "move" | "copy" | "test";
-  path: (string | number)[];
+  path: Array<string | number>;
   value?: any;
-  from?: (string | number)[];
+  from?: Array<string | number>;
 }
 // --- END: Merged Interfaces ---
 
 export class PlutoNotebookController {
-  readonly controllerId = "pluto-notebook-controller";
-  readonly notebookType = "pluto-notebook";
-  readonly label = "Pluto Notebook";
-  readonly supportedLanguages = ["julia"];
+  public readonly controllerId = "pluto-notebook-controller";
+  public readonly notebookType = "pluto-notebook";
+  public readonly label = "Pluto Notebook";
+  public readonly supportedLanguages = ["julia"];
   private readonly controller: vscode.NotebookController;
   // Map to store Pluto notebook ID to VS Code URI (only used for the worker lookup)
   // Map to track active VS Code execution objects for streaming updates
-  private activeExecutions: Map<CellId, vscode.NotebookCellExecution> =
+  private readonly activeExecutions: Map<CellId, vscode.NotebookCellExecution> =
     new Map();
   // Renderer messaging API
   private rendererMessaging?: vscode.NotebookRendererMessaging;
 
   private executeHandler = (
     cells: vscode.NotebookCell[],
-    notebook: vscode.NotebookDocument,
-    controller: vscode.NotebookController
+    notebook: vscode.NotebookDocument
   ): void | Thenable<void> => {
     for (const cell of cells) {
-      this._doExecution(cell, notebook);
+      void this._doExecution(cell, notebook);
     }
   };
 
-  private interruptHandler = async (notebook: vscode.NotebookDocument) => {
+  private interruptHandler = async (
+    notebook: vscode.NotebookDocument
+  ): Promise<void> => {
     const worker = await this.plutoManager.getWorker(notebook.uri.fsPath);
     if (worker) {
       try {
@@ -89,7 +106,7 @@ export class PlutoNotebookController {
 
     // Listen for messages from the renderer (PlutoOutput component)
     this.rendererMessaging.onDidReceiveMessage((event) => {
-      this.handleRendererMessage(event);
+      void this.handleRendererMessage(event);
     });
   }
 
@@ -108,15 +125,22 @@ export class PlutoNotebookController {
 
     // Placeholder: Handle different message types from renderer
     switch (message.type) {
-      case "bond":
+      case "bond": {
         const worker = await this.plutoManager.getWorker(
           editor.notebook.uri.fsPath
         );
         await worker?.setBond(message.name, message.value);
         this.outputChannel.appendLine(
-          `[RENDERER MESSAGE] Bond set${message.name}=${message.value}!`
+          `[RENDERER MESSAGE] Bond set${message.name}=${message.value} for ${editor.notebook.uri}!`
         );
+
+        this.sendMessageToRenderer(editor.notebook, {
+          type: "bond",
+          content: "ok",
+          cell_id: message.cell_id,
+        });
         break;
+      }
       default:
         this.outputChannel.appendLine(`[UNKNOWN MESSAGE TYPE] ${message.type}`);
     }
@@ -125,7 +149,10 @@ export class PlutoNotebookController {
   /**
    * Send a message to the renderer for a specific notebook
    */
-  sendMessageToRenderer(notebook: vscode.NotebookDocument, message: any): void {
+  public sendMessageToRenderer(
+    notebook: vscode.NotebookDocument,
+    message: any
+  ): void {
     // Find the active editor for this notebook
     const editor = vscode.window.visibleNotebookEditors.find(
       (e) => e.notebook === notebook
@@ -139,7 +166,9 @@ export class PlutoNotebookController {
     }
   }
 
-  private getCodeCellRecord(notebook: vscode.NotebookDocument) {
+  private getCodeCellRecord(
+    notebook: vscode.NotebookDocument
+  ): Record<CellId, vscode.NotebookCell> {
     return Object.fromEntries(
       notebook
         .getCells()
@@ -156,7 +185,7 @@ export class PlutoNotebookController {
     return this.getCodeCellRecord(notebook)[plutoCellId];
   }
 
-  startExecution(
+  private startExecution(
     cellId: CellId,
     notebook: vscode.NotebookDocument
   ): vscode.NotebookCellExecution {
@@ -182,39 +211,80 @@ export class PlutoNotebookController {
     notebook: vscode.NotebookDocument,
     patch: Patch,
     fullNotebookState: NotebookData
-  ) {
+  ): void {
     const path = patch.path;
     const cellId = path[1] as CellId;
 
     const currentCellState = fullNotebookState.cell_results[cellId];
+
+    const body = currentCellState.output?.body;
+    try {
+      // the state (which comes from `execution.replaceOutput([formatCellOutput])`)) is
+      // serialized differently than postMessage (which JSONifies stuff)
+      // Here we adjust for the case of binary data (e.g. svg/other images)
+      // which leave the websocket as UintArrays and get JSON.stringified to {0: byte...}
+      // TODO: this probably needs to happen at @plutojl/rainbow (which would then guarantee serializability)
+      // Since this only happens once per image, it's probably _fine_ --pg
+      if (
+        currentCellState.output.mime &&
+        typeof body === "object" &&
+        (body instanceof Uint8Array || body instanceof ArrayBuffer)
+      ) {
+        currentCellState.output.body = new TextDecoder().decode(
+          new Uint8Array(body)
+        );
+      }
+    } catch (err) {
+      console.error(`Serialization of ArrayBuffer in a string failed`, {
+        err,
+        body,
+        type: typeof body,
+        cellId,
+      });
+      // TextDecoder returns type error if body isn't an array buffer of sorts
+    }
+
+    // Optimistically send data. May be ignored.
+    // If not ignored, this makes sure logs, stdout and progress
+    // is communicated
+    this.sendMessageToRenderer(notebook, {
+      type: "setState",
+      state: currentCellState,
+      cell_id: currentCellState.cell_id,
+    });
+
     const segment2 = path[2];
 
     // 1. Update Cell Execution Status (queued, running)
-    const isStarting = patch.value === true && segment2 === "running";
-
+    const isStarting = isDefined(patch.value) && segment2 === "running";
+    if (segment2 === "running") {
+      this.plutoManager.emitCellUpdated(notebook.uri.fsPath, cellId);
+    }
     if (isStarting) {
       // Start execution
-      this.startExecution(cellId, notebook);
+      const execution = this.startExecution(cellId, notebook);
+      execution.replaceOutput([formatCellOutput(currentCellState)]);
     }
 
     // 2. Update Cell Output (only if an execution object exists)
     if (segment2 === "output") {
       // Handle final output/result update
       const execution = this.startExecution(cellId, notebook);
-      if (currentCellState?.output) {
-        execution.replaceOutput([formatCellOutput(currentCellState.output)]);
-        this.outputChannel.appendLine(
-          `[OUTPUT] Cell ${cellId} output updated.`
-        );
-      }
+      execution.replaceOutput([formatCellOutput(currentCellState)]);
+
+      this.outputChannel.appendLine(
+        `[OUTPUT] Cell ${cellId} for notebook ${notebook.uri} output updated.`
+      );
+
       execution.end(true, Date.now());
       this.activeExecutions.delete(cellId);
       this.outputChannel.appendLine(`[EXEC END] Cell ${cellId} finished.`);
     } else if (segment2 === "logs") {
       // Handle streaming logs (logs are added, path.length === 4, or array is cleared)
-      if (patch.op === "add" && path.length === 4 && currentCellState?.logs) {
-        const lastLog = currentCellState.logs[currentCellState.logs.length - 1];
-        if (lastLog) {
+      if (patch.op === "add" && path.length === 4) {
+        const lastLog =
+          currentCellState?.logs?.[currentCellState.logs.length - 1];
+        if (isDefined(lastLog)) {
           // Log the raw event to the output channel
           this.outputChannel.appendLine(`[CELL LOG] ${cellId}: ${lastLog.msg}`);
           // A proper implementation would update the cell's log output here.
@@ -234,14 +304,12 @@ export class PlutoNotebookController {
    * Handles cell reordering when Pluto's execution order changes.
    */
   private async _handleCellReorder(
-    notebook: vscode.NotebookDocument,
-    plutoNotebook: NotebookData
-  ) {
+    _notebook: vscode.NotebookDocument,
+    _plutoNotebook: NotebookData
+  ): Promise<void> {
     this.outputChannel.appendLine(`  Reorder happens here`);
-    const currentVSCells = notebook.getCells();
-    const cellObject = this.getCodeCellRecord(notebook);
-    const plutoCellOrder = plutoNotebook.cell_order;
-
+    void _notebook;
+    void _plutoNotebook;
     // Replca them in a bulk? drawbacks ???
     // A cell can be removed, added or reordered
 
@@ -322,7 +390,7 @@ export class PlutoNotebookController {
   private onPlutoNotebookUpdate = (notebook: vscode.NotebookDocument) => {
     return (event: UpdateEvent) => {
       try {
-        const patches = (event.data as any)?.patches as Patch[] | undefined;
+        const patches = event.data?.patches as Patch[] | undefined;
         const fullNotebookState = event.notebook;
 
         if (!patches || !fullNotebookState) {
@@ -336,7 +404,7 @@ export class PlutoNotebookController {
           const path = patch.path;
           const [action, ...rest] = path;
           switch (action) {
-            case "bonds":
+            case "bonds": {
               // TODO here we do bound send to the renderers
               const ref = rest[0];
               const value =
@@ -345,7 +413,8 @@ export class PlutoNotebookController {
                 `[BONDS] ref = ${ref} value = ${value} action ${patch.op}`
               );
               break;
-            case "cell_input":
+            }
+            case "cell_input": {
               if (rest[1] === "code" && patch.op === "replace") {
                 // TODO here we need to update the code for the cell
               }
@@ -356,6 +425,7 @@ export class PlutoNotebookController {
                 }`
               );
               break;
+            }
             case "cell_results":
               this._handleCellPatch(notebook, patch, fullNotebookState);
               break;
@@ -375,10 +445,11 @@ export class PlutoNotebookController {
               this.outputChannel.appendLine(
                 `[LogInternal] Internal status updated: /${path.join("/")}`
               );
-            case "cell_order":
+              break;
+            case "cell_order": {
               if (patch.op === "replace") {
                 // A cell can be removed, added or reordered
-                this._handleCellReorder(notebook, fullNotebookState);
+                void this._handleCellReorder(notebook, fullNotebookState);
               } else {
                 this.outputChannel.appendLine(
                   `[LogInternal] Cell dependencies updated: ${
@@ -387,6 +458,7 @@ export class PlutoNotebookController {
                 );
               }
               break;
+            }
             case "last_save_time":
               break;
             default:
@@ -395,15 +467,19 @@ export class PlutoNotebookController {
               );
           }
         }
-      } catch (e: any) {
+      } catch (e: unknown) {
         this.outputChannel.appendLine(
-          `Failed to process patch update: ${e.message}`
+          `Failed to process patch update: ${
+            e instanceof Error ? e.message : String(e)
+          }`
         );
       }
     };
   };
 
-  async registerNotebookDocument(notebook: vscode.NotebookDocument) {
+  public async registerNotebookDocument(
+    notebook: vscode.NotebookDocument
+  ): Promise<void> {
     if (notebook.notebookType === "pluto-notebook") {
       this.outputChannel.appendLine(`Notebook opened: ${notebook.uri.fsPath}`);
 
@@ -418,6 +494,8 @@ export class PlutoNotebookController {
 
             // Subscribe to updates from this worker
             worker.onUpdate(this.onPlutoNotebookUpdate(notebook));
+
+            // Fetch existing cell results from Pluto server
           }
         } catch (error) {
           const errorMessage =
@@ -451,7 +529,8 @@ export class PlutoNotebookController {
     }
     for (const addedCell of addedCells) {
       try {
-        const code = addedCell.document.getText();
+        // Prepare code - wrap markdown cells properly
+        const code = prepareCellCodeForWorker(addedCell);
         const cellIndex = notebook.getCells().indexOf(addedCell);
 
         this.outputChannel.appendLine(`Adding new cell at index ${cellIndex}`);
@@ -534,7 +613,7 @@ export class PlutoNotebookController {
   /**
    * Handle notebook document changes (cell additions/deletions)
    */
-  async handleVsCodeNotebookChange(
+  public async handleVsCodeNotebookChange(
     event: vscode.NotebookDocumentChangeEvent
   ): Promise<void> {
     const notebook = event.notebook;
@@ -551,10 +630,10 @@ export class PlutoNotebookController {
     }
 
     // Process cell changes
-    for (const change of event.cellChanges) {
-      // Handle cell metadata or output changes - we don't need to do anything here
-      // The worker will handle these through its update events
-    }
+    // for (const _change of event.cellChanges) {
+    // Handle cell metadata or output changes - we don't need to do anything here
+    // The worker will handle these through its update events
+    // }
 
     // Process content changes (cell additions/deletions)
     for (const change of event.contentChanges) {
@@ -563,10 +642,10 @@ export class PlutoNotebookController {
     }
   }
 
-  dispose(): void {
+  public async dispose(): Promise<void> {
     this.controller.dispose();
     // NotebookRendererMessaging doesn't have a dispose method
-    this.plutoManager.dispose();
+    await this.plutoManager.dispose();
   }
 
   private async _doExecution(
@@ -578,13 +657,13 @@ export class PlutoNotebookController {
     // If an execution is already active, reuse it, otherwise create a placeholder.
 
     const cellId = cell.metadata?.pluto_cell_id as string;
-    if (!cellId) {
+    if (isNotDefined(cellId) || isEmptyString(cellId)) {
       vscode.window.showErrorMessage(`Cell missing Pluto cell ID`);
       return;
     }
 
     // Ensure there is at least an initial execution object for this cell
-    let execution = this.startExecution(cellId, notebook);
+    const execution = this.startExecution(cellId, notebook);
 
     try {
       if (!this.plutoManager.isRunning()) {
@@ -600,7 +679,8 @@ export class PlutoNotebookController {
       }
 
       // Execute the cell. This sends the message to the Pluto kernel.
-      const code = cell.document.getText();
+      // For markdown cells, wrap in proper format
+      const code = prepareCellCodeForWorker(cell);
 
       // The worker will handle the execution and stream updates back via onNotebookUpdate.
       await this.plutoManager.executeCell(worker, cellId, code);
