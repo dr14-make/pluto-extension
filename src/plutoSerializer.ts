@@ -59,17 +59,34 @@ export function createVsCodeCellFromPlutoCell(
     code,
     isMarkdown ? "markdown" : "julia"
   );
-  const results = notebookData.cell_results[plutoCellId] ?? null;
-  if (results !== null) {
-    // Add output if available
-    cellData.outputs = [formatCellOutput(results)];
-  }
+
+  const results = notebookData.cell_results[plutoCellId] ?? {
+    cell_id: plutoCellId,
+    output: {
+      body: undefined,
+      has_pluto_hook_features: false,
+      last_run_timestamp: 0,
+      mime: "text/plain",
+      persist_js_state: false,
+      rootassignee: "",
+    },
+    running: false,
+    errored: false,
+    queued: true,
+    runtime: 0,
+    depends_on_disabled_cells: false,
+    depends_on_skipped_cells: false,
+    downstream_cells_map: {},
+    precedence_heuristic: 0,
+    logs: [],
+    published_object_keys: [""],
+    upstream_cells_map: {},
+  };
+  cellData.outputs = [formatCellOutput(results)];
   cellData.metadata = {
     pluto_cell_id: plutoCellId,
     ...cellInput.metadata,
   };
-  // TODO add outputs
-  // cellData.outputs = [];
   return cellData;
 }
 /**

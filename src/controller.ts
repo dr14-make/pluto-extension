@@ -270,7 +270,7 @@ export class PlutoNotebookController {
     if (segment2 === "output") {
       // Handle final output/result update
       const execution = this.startExecution(cellId, notebook);
-      execution.replaceOutput([formatCellOutput(currentCellState)]);
+      // execution.replaceOutput([formatCellOutput(currentCellState)]);
 
       this.outputChannel.appendLine(
         `[OUTPUT] Cell ${cellId} for notebook ${notebook.uri} output updated.`
