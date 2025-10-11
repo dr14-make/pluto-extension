@@ -48,6 +48,13 @@ export function PlutoOutput({ state, context }: PlutoOutputProps) {
   const [progress, setProgress] = useState<any>(null);
   const [terminal, setTerminal] = useState<any>(null);
   const [logs, setLogs] = useState<any>(null);
+
+  useEffect(() => {
+    if (error) {
+      setTimeout(resetError);
+    }
+  }, [error]);
+
   useEffect(() => {
     // Listen for messages from the controller
     const d = context.onDidReceiveMessage?.((message) => {
