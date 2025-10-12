@@ -11,6 +11,8 @@ import {
   useEffect,
   setup_mathjax,
   useState,
+  useErrorBoundary,
+  useMemo,
 } from "@plutojl/rainbow/ui";
 import { type RendererContext } from "vscode-notebook-renderer";
 
@@ -40,21 +42,30 @@ const cutMime = (s: { msg: string }, l = 88) => {
 
 export function PlutoOutput({ state, context }: PlutoOutputProps) {
   useMathjaxEffect();
+  const [error, resetError] = useErrorBoundary();
+
   const [localState, setLocalState] = useState(state);
   const [progress, setProgress] = useState<any>(null);
   const [terminal, setTerminal] = useState<any>(null);
   const [logs, setLogs] = useState<any>(null);
+
+  useEffect(() => {
+    if (error) {
+      setTimeout(resetError);
+    }
+  }, [error]);
+
   useEffect(() => {
     // Listen for messages from the controller
     const d = context.onDidReceiveMessage?.((message) => {
-      if (message.cell_id !== state.cell_id) {
+      if (message.cell_id !== localState.cell_id) {
         return;
       }
       // Placeholder: Handle different message types from controller
       switch (message.type) {
         case "setState": {
           const state = message.state as CellResultData;
-          setLocalState(state);
+          setLocalState({ ...state });
 
           const logs = state.logs.filter((log) => {
             return (
@@ -83,44 +94,74 @@ export function PlutoOutput({ state, context }: PlutoOutputProps) {
     return () => d?.dispose();
   }, [state.cell_id, context]);
 
-  return html`
-  ${
-    state.running && progress
-      ? html`<div>
-          <label for=${`progress_${state.cell_id}`}> ${progress}% </label
-          ><progress
-            style="width: 240px;"
-            id=${`progress_${state.cell_id}`}
-            max="100"
-            value=${progress}
-          ></progress>
-        </div>`
-      : null
-  }
-  <${OutputBody}
-    persist_js_state="${true}"
+  const OUTPUT = useMemo(() => {
+    // This is probably a bug in the immer bundling; the mime edits don't propagate ;/
+    // TODO: @pankgeorg investigate pls
+    const { mime, body } = localState.output ?? {};
+    const fixedMime =
+      (mime === "application/vnd.pluto.stacktrace+object" &&
+        (typeof body !== "object" ||
+          !("stacktrace" in localState.output.body))) ||
+      (mime === "application/vnd.pluto.tree+object" &&
+        (typeof body !== "object" || !("type" in localState.output.body)))
+        ? "text/plain"
+        : localState.output.mime;
+    if (localState.output?.mime)
+      return html`<${OutputBody}
+    persist_js_state="${localState.output.persist_js_state}"
     body="${localState.output?.body}"
-    mime="${localState.output?.mime}"
+    mime="${fixedMime}"
     sanitize_html="${false /* Maybe reconsider */}"
-  ></${OutputBody}>
-  ${
-    terminal?.length
-      ? html`<details>
+  ></${OutputBody}>`;
+    return "Loading...";
+  }, [
+    localState,
+    localState.cell_id,
+    localState.output.mime,
+    localState.output.body,
+    localState.running,
+    localState.errored,
+  ]);
+
+  if (error) {
+    console.error(error);
+    return html`<div onclick=${resetError}>
+      An error occured. Click <button onClick=${resetError}>here</button> to
+      reset the view
+      <details>
+        <summary>View error</summary>
+        (Thank you for using a pre-release. This is on us. Please copy-paste
+        this and send it our way! Sorry again!)
+        <pre>${JSON.stringify(error)}</pre>
+      </details>
+    </div>`;
+  }
+  return html` ${localState.running && progress
+    ? html`<div>
+        <label for=${`progress_${localState.cell_id}`}> ${progress}% </label
+        ><progress
+          style="width: 240px;"
+          id=${`progress_${localState.cell_id}`}
+          max="100"
+          value=${progress}
+        ></progress>
+      </div>`
+    : null}
+  ${OUTPUT}
+  ${terminal?.length
+    ? html`<details>
           <summary>stdout</summary>
           <${ANSITextOutput}
             body="${terminal.map(cutMime).join("\n")}"
           ></${ANSITextOutput}>
         </details>`
-      : null
-  }
-  ${
-    logs?.length
-      ? html`<details open>
+    : null}
+  ${logs?.length
+    ? html`<details open>
           <summary>Logs</summary>
             <${ANSITextOutput} 
                body="${logs.map(cutMime).join("\n")}"
              ></${ANSITextOutput}>
         </details>`
-      : null
-  }`;
+    : null}`;
 }

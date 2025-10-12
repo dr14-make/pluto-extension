@@ -2,7 +2,7 @@ import type { CellInputData, NotebookData } from "@plutojl/rainbow";
 import { parse, serialize } from "./rainbowAdapter.ts";
 import * as vscode from "vscode";
 import { formatCellOutput } from "./serializer.ts";
-import { v4 as uuidv4, validate } from "uuid";
+import { v4 as uuidv4 } from "uuid";
 import { isDefined, isNotDefined } from "./helpers.ts";
 
 /**
@@ -19,15 +19,23 @@ export interface ParsedNotebook {
   notebook_id: string;
   pluto_version?: string;
 }
-
+const fakeRegexTest = new RegExp(
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-7][0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+);
 export function createVsCodeCellFromPlutoCell(
   notebookData: NotebookData,
   plutoCellId: string
 ): vscode.NotebookCellData | null {
   // Validate UUID format and check cell exists
   const cellInput = notebookData.cell_inputs[plutoCellId];
+  // Proper regex is, but Julia doesn't care for [089ab] and there are "invalid" uuids out there :')
+  //const m = new RegExp(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
+  // Example UUID: b2d786ec-7f73-11ea-1a0c-f38d7b6bbc1e from the `Simple math.jl` notebook (from 2020)
 
-  if (!validate(plutoCellId) || isNotDefined(cellInput)) {
+  // TODO:
+  // If you find a UUID that doesn't comform, update to a conforming one on the fly
+  // without crashing 🥲
+  if (!fakeRegexTest.test(plutoCellId.trim()) || isNotDefined(cellInput)) {
     throw new Error(
       `Invalid or missing cell ID: ${plutoCellId} fix in the code`
     );
@@ -51,17 +59,34 @@ export function createVsCodeCellFromPlutoCell(
     code,
     isMarkdown ? "markdown" : "julia"
   );
-  const results = notebookData.cell_results[plutoCellId] ?? null;
-  if (results !== null) {
-    // Add output if available
-    cellData.outputs = [formatCellOutput(results)];
-  }
+
+  const results = notebookData.cell_results[plutoCellId] ?? {
+    cell_id: plutoCellId,
+    output: {
+      body: undefined,
+      has_pluto_hook_features: false,
+      last_run_timestamp: 0,
+      mime: "text/plain",
+      persist_js_state: false,
+      rootassignee: "",
+    },
+    running: false,
+    errored: false,
+    queued: true,
+    runtime: 0,
+    depends_on_disabled_cells: false,
+    depends_on_skipped_cells: false,
+    downstream_cells_map: {},
+    precedence_heuristic: 0,
+    logs: [],
+    published_object_keys: [""],
+    upstream_cells_map: {},
+  };
+  cellData.outputs = [formatCellOutput(results)];
   cellData.metadata = {
     pluto_cell_id: plutoCellId,
     ...cellInput.metadata,
   };
-  // TODO add outputs
-  // cellData.outputs = [];
   return cellData;
 }
 /**

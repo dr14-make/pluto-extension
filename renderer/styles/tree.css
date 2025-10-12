@@ -356,7 +356,7 @@ jlerror > section .frame-source > a {
   padding: 1px 7px;
   text-decoration: none;
   border-left: 3px solid var(--vscode-textLink-foreground);
-  color: var(--vscode-textLink-foreground);
+  color: var(--vscode-editor-foreground);
 }
 jlerror > section .frame-source > a:hover {
   background: var(--vscode-textLink-activeForeground, rgba(14, 99, 156, 0.3));
@@ -538,6 +538,7 @@ table.pluto-table tbody th:first-child {
   left: -10px; /* padding-left of pluto-output*/
   white-space: nowrap;
 }
+
 
 table.pluto-table .pluto-tree-more-td {
   text-align: left;

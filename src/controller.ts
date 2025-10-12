@@ -153,15 +153,18 @@ export class PlutoNotebookController {
     notebook: vscode.NotebookDocument,
     message: any
   ): void {
-    // Find the active editor for this notebook
-    const editor = vscode.window.visibleNotebookEditors.find(
+    // Find ALL editors for this notebook (handles split views)
+    const editors = vscode.window.visibleNotebookEditors.filter(
       (e) => e.notebook === notebook
     );
 
-    if (editor && this.rendererMessaging) {
-      this.rendererMessaging.postMessage(message, editor);
+    if (editors.length > 0 && this.rendererMessaging) {
+      // Send message to all editors displaying this notebook
+      for (const editor of editors) {
+        this.rendererMessaging.postMessage(message, editor);
+      }
       this.outputChannel.appendLine(
-        `[CONTROLLER MESSAGE] Sent: ${JSON.stringify(message)}`
+        `[CONTROLLER MESSAGE] Sent to ${editors.length} editor(s): ${JSON.stringify(message)}`
       );
     }
   }
@@ -270,7 +273,7 @@ export class PlutoNotebookController {
     if (segment2 === "output") {
       // Handle final output/result update
       const execution = this.startExecution(cellId, notebook);
-      execution.replaceOutput([formatCellOutput(currentCellState)]);
+      // execution.replaceOutput([formatCellOutput(currentCellState)]);
 
       this.outputChannel.appendLine(
         `[OUTPUT] Cell ${cellId} for notebook ${notebook.uri} output updated.`
@@ -383,12 +386,31 @@ export class PlutoNotebookController {
     //   );
     // }
   }
+  private updateAllCellsFromState = (
+    notebook: vscode.NotebookDocument,
+    update: UpdateEvent
+  ) => {
+    // Optimistically send data. May be ignored.
+    // If not ignored, this makes sure logs, stdout and progress
+    // are properly propagated to state object
+    const fullNotebookState = update.notebook;
+    Object.entries(fullNotebookState?.cell_results ?? {}).forEach(
+      ([cell_id, state]) => {
+        this.sendMessageToRenderer(notebook, {
+          type: "setState",
+          state,
+          cell_id,
+        });
+      }
+    );
+  };
 
   /**
    * Handles streaming updates from the Pluto worker via patches.
    */
   private onPlutoNotebookUpdate = (notebook: vscode.NotebookDocument) => {
     return (event: UpdateEvent) => {
+      console.log({ event });
       try {
         const patches = event.data?.patches as Patch[] | undefined;
         const fullNotebookState = event.notebook;
@@ -399,7 +421,7 @@ export class PlutoNotebookController {
           );
           return;
         }
-
+        let anyWeird = false;
         for (const patch of patches) {
           const path = patch.path;
           const [action, ...rest] = path;
@@ -462,12 +484,18 @@ export class PlutoNotebookController {
             case "last_save_time":
               break;
             default:
+              anyWeird = true;
               this.outputChannel.appendLine(
                 `[UNHANDLED]  ${patch.path.join(".")} action ${patch.op}`
               );
           }
         }
+        if (anyWeird) {
+          console.log("Not sure if all ok, updating everything");
+          this.updateAllCellsFromState(notebook, event);
+        }
       } catch (e: unknown) {
+        this.updateAllCellsFromState(notebook, event);
         this.outputChannel.appendLine(
           `Failed to process patch update: ${
             e instanceof Error ? e.message : String(e)
@@ -494,8 +522,6 @@ export class PlutoNotebookController {
 
             // Subscribe to updates from this worker
             worker.onUpdate(this.onPlutoNotebookUpdate(notebook));
-
-            // Fetch existing cell results from Pluto server
           }
         } catch (error) {
           const errorMessage =

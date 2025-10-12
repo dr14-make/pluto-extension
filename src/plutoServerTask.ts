@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { isDefined } from "./helpers.ts";
+import { isPortAvailable, findAvailablePort } from "./portUtils.ts";
 
 /**
  * Parse Julia executable path to extract command and arguments
@@ -27,8 +28,12 @@ export class PlutoServerTaskManager {
   private onStopCallback?: () => void;
   private taskEndListener?: vscode.Disposable;
   private isStarting = false;
+  private actualPort: number;
+  private onPortChangedCallback?: (newPort: number) => void;
 
-  constructor(private readonly port = 1234) {}
+  constructor(private readonly port = 1234) {
+    this.actualPort = port;
+  }
 
   /**
    * Check if server task is running
@@ -45,6 +50,20 @@ export class PlutoServerTaskManager {
   }
 
   /**
+   * Set callback to be called when port changes
+   */
+  public onPortChanged(callback: (newPort: number) => void): void {
+    this.onPortChangedCallback = callback;
+  }
+
+  /**
+   * Get the actual port being used by the server
+   */
+  public getActualPort(): number {
+    return this.actualPort;
+  }
+
+  /**
    * Start Pluto server as a VSCode task
    */
   public async start(): Promise<void> {
@@ -56,7 +75,7 @@ export class PlutoServerTaskManager {
     const existingTasks = vscode.tasks.taskExecutions;
     for (const execution of existingTasks) {
       if (
-        execution.task.name === `Pluto Server (port ${this.port})` ||
+        execution.task.name === `Pluto Server (port ${this.actualPort})` ||
         execution.task.definition.type === "pluto-server"
       ) {
         console.log(
@@ -69,6 +88,39 @@ export class PlutoServerTaskManager {
 
     // Set starting flag immediately to prevent race condition
     this.isStarting = true;
+
+    // Check if default port is available, if not find an available port
+    const portAvailable = await isPortAvailable(this.port);
+    if (!portAvailable) {
+      console.log(
+        `[PlutoServerTask] Port ${this.port} is not available, finding alternative...`
+      );
+      try {
+        this.actualPort = await findAvailablePort(this.port);
+        console.log(
+          `[PlutoServerTask] Found available port: ${this.actualPort}`
+        );
+
+        // Notify about port change
+        if (this.onPortChangedCallback && this.actualPort !== this.port) {
+          this.onPortChangedCallback(this.actualPort);
+        }
+
+        // Show notification to user about port change
+        if (this.actualPort !== this.port) {
+          vscode.window.showWarningMessage(
+            `Port ${this.port} is in use. Starting Pluto server on port ${this.actualPort} instead.`
+          );
+        }
+      } catch (error) {
+        this.isStarting = false;
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        throw new Error(`Failed to find available port: ${errorMessage}`);
+      }
+    } else {
+      this.actualPort = this.port;
+    }
 
     // Create promise that resolves when server is ready
     this.serverReadyPromise = new Promise<void>((resolve) => {
@@ -87,7 +139,7 @@ export class PlutoServerTaskManager {
     const juliaArgs = [
       ...baseArgs,
       "-e",
-      `using Pluto; Pluto.run(port=${this.port}; require_secret_for_open_links=false, require_secret_for_access=false, launch_browser=false)`,
+      `using Pluto; Pluto.run(port=${this.actualPort}; require_secret_for_open_links=false, require_secret_for_access=false, launch_browser=false)`,
     ];
 
     console.log(
@@ -103,7 +155,7 @@ export class PlutoServerTaskManager {
     // Create the task definition
     const taskDefinition: vscode.TaskDefinition = {
       type: "pluto-server",
-      port: this.port,
+      port: this.actualPort,
     };
 
     // Create shell execution for Julia command
@@ -115,7 +167,7 @@ export class PlutoServerTaskManager {
     const task = new vscode.Task(
       taskDefinition,
       vscode.TaskScope.Workspace,
-      `Pluto Server (port ${this.port})`,
+      `Pluto Server (port ${this.actualPort})`,
       "pluto-notebook",
       shellExecution,
       [] // No problem matchers
@@ -142,6 +194,7 @@ export class PlutoServerTaskManager {
         this.serverReadyPromise = undefined;
         this.serverReadyResolve = undefined;
         this.isStarting = false;
+        this.actualPort = this.port; // Reset to default port
 
         // Cleanup listener
         if (this.taskEndListener) {
@@ -225,13 +278,15 @@ export class PlutoServerTaskManager {
     // Terminate the task (this will trigger the onDidEndTaskProcess listener)
     this.taskExecution.terminate();
     // Note: State reset happens in the listener
+    // Reset actual port to default port when stopped
+    this.actualPort = this.port;
   }
 
   /**
    * Get the server URL
    */
   public getServerUrl(): string {
-    return `http://localhost:${this.port}`;
+    return `http://localhost:${this.actualPort}`;
   }
 
   /**

@@ -59,6 +59,15 @@ export class PlutoManager {
     this.taskManager.onStop(() => {
       this.onServerStopped();
     });
+
+    // Register callback to update server URL when port changes
+    this.taskManager.onPortChanged((newPort: number) => {
+      this.serverUrl = `http://localhost:${newPort}`;
+      // Update host with new URL
+      if (this.host) {
+        this.host = new Host(this.serverUrl);
+      }
+    });
   }
 
   /**
@@ -323,6 +332,14 @@ export class PlutoManager {
    */
   public getServerUrl(): string {
     return this.serverUrl;
+  }
+
+  /**
+   * Get the actual port being used by the server
+   * This may differ from the configured port if the configured port was unavailable
+   */
+  public getActualPort(): number {
+    return this.taskManager.getActualPort();
   }
 
   /**
