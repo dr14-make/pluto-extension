@@ -153,15 +153,18 @@ export class PlutoNotebookController {
     notebook: vscode.NotebookDocument,
     message: any
   ): void {
-    // Find the active editor for this notebook
-    const editor = vscode.window.visibleNotebookEditors.find(
+    // Find ALL editors for this notebook (handles split views)
+    const editors = vscode.window.visibleNotebookEditors.filter(
       (e) => e.notebook === notebook
     );
 
-    if (editor && this.rendererMessaging) {
-      this.rendererMessaging.postMessage(message, editor);
+    if (editors.length > 0 && this.rendererMessaging) {
+      // Send message to all editors displaying this notebook
+      for (const editor of editors) {
+        this.rendererMessaging.postMessage(message, editor);
+      }
       this.outputChannel.appendLine(
-        `[CONTROLLER MESSAGE] Sent: ${JSON.stringify(message)}`
+        `[CONTROLLER MESSAGE] Sent to ${editors.length} editor(s): ${JSON.stringify(message)}`
       );
     }
   }
