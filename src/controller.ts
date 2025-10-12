@@ -389,7 +389,7 @@ export class PlutoNotebookController {
   ) => {
     // Optimistically send data. May be ignored.
     // If not ignored, this makes sure logs, stdout and progress
-    // is communicated
+    // are properly propagated to state object
     const fullNotebookState = update.notebook;
     Object.entries(fullNotebookState?.cell_results ?? {}).forEach(
       ([cell_id, state]) => {
@@ -519,8 +519,6 @@ export class PlutoNotebookController {
 
             // Subscribe to updates from this worker
             worker.onUpdate(this.onPlutoNotebookUpdate(notebook));
-
-            // Fetch existing cell results from Pluto server
           }
         } catch (error) {
           const errorMessage =
